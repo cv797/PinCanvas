@@ -45,7 +45,7 @@ function setWindowUrl(href: string): void {
 }
 
 function readPref<T>(key: string): T | null {
-  const raw = storage.get(`pin_${key}`);
+  const raw = storage.get(`tapnow_${key}`);
   return raw ? (JSON.parse(raw) as T) : null;
 }
 
@@ -60,12 +60,9 @@ describe('importRuntimeConfigFromUrl', () => {
 
     expect(importRuntimeConfigFromUrl()).toBe(true);
     expect(readPref<string>('global_key')).toBe('sk-test');
-    expect(readPref<string>('access_token')).toBeNull();
+    expect(readPref<string>('access_token')).toBe('user-access');
     expect(readPref<string>('global_base_url')).toBe(FIXED_BASE_URL);
     expect(readPref<string>('user_id')).toBe('42');
-    expect(JSON.parse(storage.get('user') ?? '{}')).toMatchObject({
-      id: 42,
-    });
 
     const providers = readPref<ProviderConfig[]>('provider_library') ?? [];
     expect(providers).toContainEqual({
@@ -87,7 +84,7 @@ describe('importRuntimeConfigFromUrl', () => {
 
   it('updates the auto provider key without overwriting manual model bindings', () => {
     storage.set(
-      'pin_provider_library',
+      'tapnow_provider_library',
       JSON.stringify([
         {
           id: 'new-api-auto',
@@ -98,7 +95,7 @@ describe('importRuntimeConfigFromUrl', () => {
       ]),
     );
     storage.set(
-      'pin_model_overrides',
+      'tapnow_model_overrides',
       JSON.stringify({
         'seedance-2': {
           providerAssignment: {

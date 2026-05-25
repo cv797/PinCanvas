@@ -2,28 +2,7 @@ import { DEFAULT_MODELS } from '@/api/models';
 import { FIXED_BASE_URL } from '@/api/upstream';
 import type { ModelDef } from '@/types/model';
 import type { ProviderConfig } from '@/types/provider';
-import { getPref, removePref, setPref } from './prefs';
-
-/**
- * 从 URL 参数 / 哈希中提取运行时凭证（API Key、用户 ID、签名等），
- * 写入 localStorage 后立即从地址栏移除参数。
- *
- * ⚠️ 安全警告：
- * 通过 URL 传递 API Key 存在显著风险：
- *   - URL 会被浏览器历史记录持久化（即使从地址栏移除）
- *   - 中转的代理、CDN、网关可能记录完整 URL
- *   - HTTP Referer 头可能向第三方泄露
- *   - 浏览器扩展和书签同步可能扩散
- *
- * 仅在以下场景使用：
- *   - 受信任的同源跳转（公司内部 SSO、自托管网关）
- *   - 测试环境的便利登录
- *
- * 生产环境应优先使用：
- *   - 用户在设置面板手动粘贴 Key
- *   - 服务端代理 + 短时 token
- *   - 浏览器扩展安全地注入凭证
- */
+import { getPref, setPref } from './prefs';
 
 const API_KEY_PARAMS = ['key', 'apiKey', 'api_key'] as const;
 const ACCESS_TOKEN_PARAMS = ['access_token', 'accessToken', 'user_token', 'userToken'] as const;
@@ -45,9 +24,8 @@ export function importRuntimeConfigFromUrl(): boolean {
     upsertAutoProvider(config.apiKey);
     bindDefaultModelsToAutoProvider();
   }
-  removePref('access_token');
+  if (config.accessToken) setPref('access_token', config.accessToken);
   if (config.userId) setPref('user_id', config.userId);
-  if (config.userId) mergeRuntimeUserSession(config);
   if (config.linkTs) setPref('link_ts', config.linkTs);
   if (config.linkSig) setPref('link_sig', config.linkSig);
   removeRuntimeConfigFromAddressBar(window.location, window.history);
@@ -123,34 +101,6 @@ function hasRuntimeConfig(config: RuntimeConfig): boolean {
   return Boolean(
     config.apiKey || config.accessToken || config.userId || config.linkTs || config.linkSig,
   );
-}
-
-function mergeRuntimeUserSession(config: RuntimeConfig): void {
-  if (typeof localStorage === 'undefined') return;
-  try {
-    const raw = localStorage.getItem('user');
-    const current = raw ? JSON.parse(raw) : {};
-    const user = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        ...user,
-        ...(config.userId ? { id: parseUserId(config.userId) } : {}),
-      }),
-    );
-  } catch {
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        ...(config.userId ? { id: parseUserId(config.userId) } : {}),
-      }),
-    );
-  }
-}
-
-function parseUserId(value: string): string | number {
-  const numeric = Number(value);
-  return Number.isInteger(numeric) && String(numeric) === value ? numeric : value;
 }
 
 function removeRuntimeConfigFromAddressBar(location: Location, history: History): void {

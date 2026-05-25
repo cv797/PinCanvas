@@ -1,7 +1,7 @@
 import type { ModelDef } from '@/types/model';
 
 export const DEFAULT_MODELS: ModelDef[] = [
-  // OpenAI 兼容网关（Wan 系列等）
+  // xicily / new-api OpenAI-compatible
   {
     id: 'wan2.7-image',
     name: 'wan2.7-image',
@@ -55,6 +55,27 @@ export const DEFAULT_MODELS: ModelDef[] = [
     group: 'Wan',
   },
   {
+    id: 'kling/kling-v3-omni-video-generation',
+    name: 'kling/kling-v3-omni-video-generation',
+    provider: 'openai',
+    modality: 'video',
+    durations: ['4s', '5s', '6s', '7s', '8s', '9s', '10s'],
+    ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    resolutions: ['720p', '1080p'],
+    group: 'Kling',
+  },
+  {
+    id: 'seedance-2',
+    name: 'seedance-2',
+    provider: 'openai',
+    modality: 'video',
+    async: true,
+    durations: ['4s', '5s', '6s', '7s', '8s', '9s', '10s'],
+    ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    resolutions: ['720p', '1080p'],
+    group: 'Seedance',
+  },
+  {
     id: 'doubao-seedance-2-0-260128',
     name: 'doubao-seedance-2-0-260128',
     provider: 'openai',
@@ -63,6 +84,17 @@ export const DEFAULT_MODELS: ModelDef[] = [
     durations: ['4s', '5s', '6s', '7s', '8s', '9s', '10s'],
     ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
     resolutions: ['720p', '1080p'],
+    group: 'Seedance',
+  },
+  {
+    id: 'seedance-2-fast',
+    name: 'seedance-2-fast',
+    provider: 'openai',
+    modality: 'video',
+    async: true,
+    durations: ['4s', '5s', '6s', '7s', '8s', '9s', '10s'],
+    ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
+    resolutions: ['720p'],
     group: 'Seedance',
   },
   {
@@ -198,9 +230,8 @@ export const DEFAULT_MODELS: ModelDef[] = [
 
 const BY_ID: Map<string, ModelDef> = new Map(DEFAULT_MODELS.map((m) => [m.id, m]));
 
-const USER_LIBRARY_KEY_NEW = 'pin_model_library';
-const USER_LIBRARY_KEY_LEGACY = ['ncs_model_library', 'tapnow_model_library'];
-const OVERRIDES_KEY = 'pin_model_overrides';
+const USER_LIBRARY_KEY = 'tapnow_model_library';
+const OVERRIDES_KEY = 'tapnow_model_overrides';
 
 /**
  * 查找模型：先在 DEFAULT_MODELS 找；找不到读 localStorage 用户库 fallback。
@@ -209,18 +240,8 @@ const OVERRIDES_KEY = 'pin_model_overrides';
 export function getModelDef(id: string): ModelDef | undefined {
   const def = BY_ID.get(id);
   if (def) return applyModelOverride(id, def);
-  if (typeof localStorage === 'undefined') return undefined;
   try {
-    let raw = localStorage.getItem(USER_LIBRARY_KEY_NEW);
-    if (!raw) {
-      for (const legacyKey of USER_LIBRARY_KEY_LEGACY) {
-        const legacy = localStorage.getItem(legacyKey);
-        if (legacy) {
-          raw = legacy;
-          break;
-        }
-      }
-    }
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_LIBRARY_KEY) : null;
     if (!raw) return undefined;
     const userModels = JSON.parse(raw) as ModelDef[];
     return Array.isArray(userModels) ? userModels.find((m) => m.id === id) : undefined;

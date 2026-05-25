@@ -165,7 +165,7 @@ function corsHeaders(): Record<string, string> {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, New-Api-User, X-Media-Base-Url, X-Media-User',
+      'Content-Type, Authorization, New-Api-User, X-Media-Base-Url, X-Media-Access-Token, X-Media-User',
   };
 }
 
@@ -283,11 +283,12 @@ async function handleMediaBlob(url: URL): Promise<Response> {
 
 async function handleMediaUploadProxy(request: Request): Promise<Response> {
   const baseUrl = request.headers.get('x-media-base-url')?.trim().replace(/\/+$/, '');
+  const accessToken = request.headers.get('x-media-access-token')?.trim();
   const userId = request.headers.get('x-media-user')?.trim();
   if (!baseUrl || !isImportableUrl(baseUrl)) {
     return json({ success: false, message: 'missing media proxy target' }, { status: 400 });
   }
-  if (!userId) {
+  if (!accessToken || !userId) {
     return json(
       { success: false, message: 'missing user media auth; please open canvas from new-api' },
       { status: 401 },
@@ -306,20 +307,14 @@ async function handleMediaUploadProxy(request: Request): Promise<Response> {
   forward.append('name', name);
 
   const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (userId) headers['New-Api-User'] = userId;
-  let response: Response;
-  let body = '';
-  try {
-    response = await fetch(`${baseUrl}/api/user/media/library/upload`, {
-      method: 'POST',
-      headers,
-      body: forward,
-    });
-    body = await response.text();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return json({ success: false, message: `media proxy fetch failed: ${message}` }, { status: 502 });
-  }
+  const response = await fetch(`${baseUrl}/api/user/media/library/upload`, {
+    method: 'POST',
+    headers,
+    body: forward,
+  });
+  const body = await response.text();
   return new Response(body, {
     status: response.status,
     headers: {
@@ -381,11 +376,10 @@ function signTosPut(input: {
   const payloadHash = sha256Hex(input.body);
   const canonicalUri = `/${encodePath(input.key)}`;
   const credentialScope = `${date}/${region}/${service}/aws4_request`;
-  const signedHeaders = 'content-type;host;x-amz-acl;x-amz-content-sha256;x-amz-date';
+  const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';
   const canonicalHeaders =
     `content-type:${input.contentType}\n` +
     `host:${input.host}\n` +
-    'x-amz-acl:public-read\n' +
     `x-amz-content-sha256:${payloadHash}\n` +
     `x-amz-date:${amzDate}\n`;
   const canonicalRequest = [
@@ -409,7 +403,6 @@ function signTosPut(input: {
     Authorization: `AWS4-HMAC-SHA256 Credential=${input.config.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
     'Content-Type': input.contentType,
     Host: input.host,
-    'x-amz-acl': 'public-read',
     'x-amz-content-sha256': payloadHash,
     'x-amz-date': amzDate,
   };
