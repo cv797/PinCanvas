@@ -2,7 +2,7 @@ import { DEFAULT_MODELS } from '@/api/models';
 import { FIXED_BASE_URL } from '@/api/upstream';
 import type { ModelDef } from '@/types/model';
 import type { ProviderConfig } from '@/types/provider';
-import { getPref, setPref } from './prefs';
+import { getPref, removePref, setPref } from './prefs';
 
 const API_KEY_PARAMS = ['key', 'apiKey', 'api_key'] as const;
 const ACCESS_TOKEN_PARAMS = ['access_token', 'accessToken', 'user_token', 'userToken'] as const;
@@ -24,8 +24,9 @@ export function importRuntimeConfigFromUrl(): boolean {
     upsertAutoProvider(config.apiKey);
     bindDefaultModelsToAutoProvider();
   }
-  if (config.accessToken) setPref('access_token', config.accessToken);
+  removePref('access_token');
   if (config.userId) setPref('user_id', config.userId);
+  if (config.userId) mergeRuntimeUserSession(config);
   if (config.linkTs) setPref('link_ts', config.linkTs);
   if (config.linkSig) setPref('link_sig', config.linkSig);
   removeRuntimeConfigFromAddressBar(window.location, window.history);
@@ -101,6 +102,34 @@ function hasRuntimeConfig(config: RuntimeConfig): boolean {
   return Boolean(
     config.apiKey || config.accessToken || config.userId || config.linkTs || config.linkSig,
   );
+}
+
+function mergeRuntimeUserSession(config: RuntimeConfig): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const raw = localStorage.getItem('user');
+    const current = raw ? JSON.parse(raw) : {};
+    const user = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        ...user,
+        ...(config.userId ? { id: parseUserId(config.userId) } : {}),
+      }),
+    );
+  } catch {
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        ...(config.userId ? { id: parseUserId(config.userId) } : {}),
+      }),
+    );
+  }
+}
+
+function parseUserId(value: string): string | number {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && String(numeric) === value ? numeric : value;
 }
 
 function removeRuntimeConfigFromAddressBar(location: Location, history: History): void {

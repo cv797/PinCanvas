@@ -55,16 +55,6 @@ export const DEFAULT_MODELS: ModelDef[] = [
     group: 'Wan',
   },
   {
-    id: 'kling/kling-v3-omni-video-generation',
-    name: 'kling/kling-v3-omni-video-generation',
-    provider: 'openai',
-    modality: 'video',
-    durations: ['4s', '5s', '6s', '7s', '8s', '9s', '10s'],
-    ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
-    resolutions: ['720p', '1080p'],
-    group: 'Kling',
-  },
-  {
     id: 'seedance-2',
     name: 'seedance-2',
     provider: 'openai',

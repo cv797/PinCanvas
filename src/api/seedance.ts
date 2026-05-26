@@ -31,6 +31,9 @@ export function buildSeedanceVideoVars(input: BuildSeedanceVideoVarsInput): Vars
   const hasVideoRef = Boolean(input.videoUrl);
   const audioUrls = (input.audioUrls ?? []).filter(Boolean);
   const hasAudioRef = audioUrls.length > 0;
+  if (input.mode === 'omni-reference' && hasAudioRef && imageUrls.length === 0 && !hasVideoRef) {
+    throw new Error('Seedance 全能参考不能只连接音频，请再连接一张图片或一个视频参考');
+  }
   const duration = clampSeedanceDuration(input.duration);
   const vars: Vars = {
     modelName: input.modelName,

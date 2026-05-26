@@ -101,24 +101,45 @@ describe('buildSeedanceVideoVars', () => {
     });
   });
 
-  it('builds multi-ref vars with audio references in metadata', () => {
+  it('rejects audio-only omni-reference vars before sending to Seedance', () => {
+    expect(() =>
+      buildSeedanceVideoVars({
+        modelName: 'seedance-2',
+        prompt: 'use audio',
+        duration: '8s',
+        ratio: '16:9',
+        resolution: '720p',
+        imageUrls: [],
+        audioUrls: ['https://example.com/ref.mp3'],
+        mode: 'omni-reference',
+      }),
+    ).toThrow('Seedance 全能参考不能只连接音频');
+  });
+
+  it('builds multi-ref vars with audio and image references in metadata', () => {
     const vars = buildSeedanceVideoVars({
       modelName: 'seedance-2',
       prompt: 'use audio',
       duration: '8s',
       ratio: '16:9',
       resolution: '720p',
-      imageUrls: [],
+      imageUrls: ['https://example.com/a.png'],
       audioUrls: ['https://example.com/ref.mp3'],
       mode: 'omni-reference',
     });
 
     expect(vars.mode).toBe('multi_ref');
+    expect(vars.imageUrls).toEqual(['https://example.com/a.png']);
     expect(vars.metadata).toMatchObject({
       audio_urls: ['https://example.com/ref.mp3'],
       reference_audio_urls: ['https://example.com/ref.mp3'],
       content: [
         { type: 'text', text: 'use audio' },
+        {
+          type: 'image_url',
+          role: 'reference_image',
+          image_url: { url: 'https://example.com/a.png' },
+        },
         {
           type: 'audio_url',
           role: 'reference_audio',
