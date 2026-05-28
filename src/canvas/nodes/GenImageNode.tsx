@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { BookOpen, ImageIcon, SlidersHorizontal, Zap } from 'lucide-react';
+import { AtSign, BookOpen, ImageIcon, SlidersHorizontal, Zap } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getModelDisplayName } from '@/api/models';
 import { normalizeImageModelId } from '@/api/upstream';
@@ -30,6 +30,82 @@ const IMAGE_PRESETS = [
   { label: '9:16(4k)', ratio: '9:16', width: 2160, height: 3840 },
   { label: 'auto', ratio: 'auto', width: 1024, height: 1024 },
 ];
+
+interface ImageMentionCandidate {
+  id: string;
+  label: string;
+  url: string;
+  previewUrl?: string;
+}
+
+function createImageMentionCardHtml(item: ImageMentionCandidate): string {
+  const media = `<img src="${escapeAttr(item.previewUrl || item.url)}" alt="" style="width:22px;height:22px;border-radius:5px;object-fit:cover;display:inline-block;flex-shrink:0;" />`;
+  return `<span contenteditable="false" data-mention="media" data-mention-type="image" data-mention-label="${escapeAttr(item.label)}" data-mention-url="${escapeAttr(item.url)}" style="display:inline-flex;align-items:center;gap:4px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:2px 7px;margin:0 2px;cursor:default;user-select:none;vertical-align:middle;white-space:nowrap;font-size:12px;color:#374151;">${media}<span>${escapeHtml(item.label)}</span></span>&nbsp;`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value: string): string {
+  return escapeHtml(value);
+}
+
+function extractPromptText(root: HTMLElement | null): string {
+  if (!root) return '';
+
+  const walk = (node: ChildNode): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const el = node as HTMLElement;
+    if (el.dataset.mention === 'media') return el.dataset.mentionLabel || '';
+    return Array.from(el.childNodes).map(walk).join('');
+  };
+
+  return Array.from(root.childNodes)
+    .map(walk)
+    .join('')
+    .replace(/ /g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function removeTrailingAt(range: Range, root: HTMLElement): void {
+  const before = range.cloneRange();
+  before.setStart(root, 0);
+  if (!before.toString().endsWith('@')) return;
+
+  const text = range.startContainer;
+  if (text.nodeType === Node.TEXT_NODE) {
+    const textNode = text as Text;
+    const offset = range.startOffset;
+    if (offset > 0 && textNode.data[offset - 1] === '@') {
+      textNode.deleteData(offset - 1, 1);
+      range.setStart(textNode, offset - 1);
+      range.collapse(true);
+    }
+  }
+}
+
+function textBeforeSelection(root: HTMLElement): string {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return '';
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer)) return '';
+  const before = range.cloneRange();
+  before.setStart(root, 0);
+  return before.toString();
+}
+
+function shouldKeepMentionOpen(root: HTMLElement): boolean {
+  const before = textBeforeSelection(root);
+  return /(^|\s)@$/.test(before);
+}
 
 export function GenImageNodeComp({ id, selected }: NodeProps) {
   const nid = id as NodeId;
@@ -104,6 +180,12 @@ export function GenImageNodeComp({ id, selected }: NodeProps) {
 
   const selectedPreset = findSelectedPreset(settings.ratio, imageWidth, imageHeight);
   const settingsSummary = `${qualityLabel(quality)} / ${selectedPreset?.label ?? `${imageWidth}x${imageHeight}`} / ${count}张`;
+  const mentionCandidates = refs.map((url, index) => ({
+    id: `image-${index}-${url}`,
+    label: `图片${index + 1}`,
+    url,
+    previewUrl: url,
+  }));
 
   return (
     <div className="relative h-full w-full overflow-visible">
@@ -135,12 +217,18 @@ export function GenImageNodeComp({ id, selected }: NodeProps) {
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
         >
-          <textarea
-            className="nodrag min-h-28 max-h-40 w-full resize-none rounded-[18px] border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm leading-6 text-zinc-800 shadow-inner outline-none transition-colors placeholder:text-zinc-400 focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-            placeholder={upstream.prompt ? `(上游 prompt: ${upstream.prompt})` : '描述要生成的图片内容'}
+          <ImagePromptMentionEditor
             value={settings.prompt}
-            onChange={(event) => patchSettings<'gen-image'>(nid, { prompt: event.target.value })}
+            html={settings.promptHtml}
+            placeholder={upstream.prompt ? `(上游 prompt: ${upstream.prompt})` : '描述要生成的图片内容'}
+            candidates={mentionCandidates}
             disabled={isBusy}
+            onChange={({ text, html }) =>
+              patchSettings<'gen-image'>(nid, {
+                prompt: text,
+                promptHtml: html,
+              })
+            }
           />
           <div className="mt-3 flex min-w-0 items-center gap-2">
             <BookOpen className="h-4 w-4 shrink-0 text-zinc-700" />
@@ -271,6 +359,180 @@ function ImageSettingsPanel({
           ))}
         </div>
       </SettingSection>
+    </div>
+  );
+}
+
+function ImagePromptMentionEditor({
+  value,
+  html,
+  placeholder,
+  candidates,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  html?: string;
+  placeholder: string;
+  candidates: ImageMentionCandidate[];
+  disabled?: boolean;
+  onChange: (next: { text: string; html: string }) => void;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const nextHtml = html || escapeHtml(value || '');
+    if (editor.innerHTML !== nextHtml) editor.innerHTML = nextHtml;
+  }, [html, value]);
+
+  const sync = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    onChange({ text: extractPromptText(editor), html: editor.innerHTML });
+    if (open && !shouldKeepMentionOpen(editor)) setOpen(false);
+  }, [onChange, open]);
+
+  const rememberSelection = useCallback(() => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.startContainer)) return;
+    savedRangeRef.current = range.cloneRange();
+    const rect = range.getBoundingClientRect();
+    const host = editor.getBoundingClientRect();
+    setPos({
+      top: Math.max(28, rect.bottom - host.top + 6),
+      left: Math.max(0, Math.min(rect.left - host.left, host.width - 220)),
+    });
+  }, []);
+
+  const openMention = useCallback(() => {
+    window.setTimeout(() => {
+      rememberSelection();
+      setOpen(true);
+    }, 0);
+  }, [rememberSelection]);
+
+  const insertMention = useCallback(
+    (item: ImageMentionCandidate) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      const selection = window.getSelection();
+      let range = savedRangeRef.current;
+      if (!range || !editor.contains(range.startContainer)) {
+        range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+      }
+      removeTrailingAt(range, editor);
+      range.deleteContents();
+
+      const temp = document.createElement('span');
+      temp.innerHTML = createImageMentionCardHtml(item);
+      const fragment = document.createDocumentFragment();
+      let last: ChildNode | null = null;
+      while (temp.firstChild) {
+        last = fragment.appendChild(temp.firstChild);
+      }
+      range.insertNode(fragment);
+      if (last) {
+        range.setStartAfter(last);
+        range.collapse(true);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+      savedRangeRef.current = null;
+      setOpen(false);
+      sync();
+    },
+    [sync],
+  );
+
+  return (
+    <div className="relative">
+      <div
+        ref={editorRef}
+        className="nodrag min-h-28 max-h-40 overflow-y-auto rounded-[18px] border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm leading-6 text-zinc-800 shadow-inner outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)]"
+        contentEditable={!disabled}
+        suppressContentEditableWarning
+        data-placeholder={placeholder}
+        onInput={sync}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 120);
+        }}
+        onMouseUp={rememberSelection}
+        onKeyUp={(event) => {
+          rememberSelection();
+          if (event.key === 'Escape') setOpen(false);
+        }}
+        onBeforeInput={(event) => {
+          if ((event.nativeEvent as InputEvent).data === '@') openMention();
+        }}
+        onPaste={(event) => {
+          event.preventDefault();
+          const text = event.clipboardData.getData('text/plain');
+          document.execCommand('insertText', false, text);
+          sync();
+        }}
+      />
+      <button
+        type="button"
+        className="nodrag absolute bottom-1 right-1 rounded-md bg-zinc-100 p-1 text-zinc-500 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          rememberSelection();
+          setOpen((current) => !current);
+        }}
+        disabled={disabled}
+        title="插入参考图"
+      >
+        <AtSign className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div
+          className="nodrag absolute z-50 max-h-64 w-56 overflow-y-auto rounded-2xl border border-zinc-200 bg-white/95 p-2 shadow-xl backdrop-blur"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+            可用参考图
+          </div>
+          {candidates.length > 0 ? (
+            candidates.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-zinc-100"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insertMention(item)}
+              >
+                <img
+                  src={item.previewUrl || item.url}
+                  alt={item.label}
+                  className="h-8 w-8 rounded-lg object-cover"
+                  draggable={false}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-medium text-zinc-700">
+                    {item.label}
+                  </span>
+                  <span className="block text-[10px] text-zinc-400">图片</span>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-2 py-4 text-center text-xs text-zinc-400">
+              先连接图片节点
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
