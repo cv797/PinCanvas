@@ -1,6 +1,7 @@
 # 架构总览
 
-本文档描述 PinCanvas 的系统设计，作为后续开发与扩展的参考。
+本文档是从 `_legacy/` 中的单文件 HTML 反推得到的系统模型，作为后续 TypeScript 重写的输入。
+不直接拷贝原代码；下游所有命名、API 形状、模块边界都以本组文档为准。
 
 ## 1. 顶层数据模型
 
@@ -52,7 +53,7 @@ type Edge = {
                ▼                                  ▼
 ┌──────────────────────────────┐    ┌───────────────────────┐
 │ localStorage（≤ ~5MB）        │    │ 内存栈（zundo 中间件）│
-│  - 偏好键 pin_*               │    │  - 默认上限 256       │
+│  - 偏好键 tapnow_*            │    │  - 默认上限 256       │
 │  - 小型快照（节点元数据）       │    │  - 受 max_undo_steps │
 └──────────────────────────────┘    └───────────────────────┘
                │
@@ -73,7 +74,7 @@ type Edge = {
 
 ## 3. 撤销栈
 
-- 容量由 `pin_max_undo_steps` 控制（典型值 256-512）
+- 容量由 `tapnow_max_undo_steps` 控制（典型值 256-512）
 - 数据形式：`{ nodes, connections, timestamp }`
 - 推入时机：每次会改变结构的操作（增删节点/连线、settings 变更、批量操作完成）
 - **不**进入撤销栈：纯视图变更（缩放、平移、选中）、运行态字段（progress、isGenerating）
@@ -85,10 +86,10 @@ type Edge = {
 ```ts
 // 伪代码
 const debouncedSave = debounce(async () => {
-  if (!localStorage.pin_autosave) return;
+  if (!localStorage.tapnow_autosave) return;
   const snapshot = { nodes, connections, meta, timestamp: Date.now() };
   await idb.set('autosave_db', snapshot);
-  localStorage.pin_autosave_meta = JSON.stringify({
+  localStorage.tapnow_autosave_meta = JSON.stringify({
     timestamp: snapshot.timestamp,
     storage: 'idb',
   });
@@ -99,7 +100,7 @@ store.subscribe(debouncedSave);
 ```
 
 启动时：
-1. 读 `pin_autosave_meta` → 找到最近一次保存时间
+1. 读 `tapnow_autosave_meta` → 找到最近一次保存时间
 2. 从 IDB 加载快照 → hydrate 到 store
 3. 失败则回退到 localStorage 小快照（仅元数据 + 连线，不含大图）
 
@@ -123,9 +124,9 @@ type GenerationTask = {
 
 | 键 | 含义 | 默认 |
 |---|---|---|
-| `pin_batch_queue_mode` | `parallel` / `serial` | `parallel` |
-| `pin_batch_concurrency` | 并发上限 | `1` |
-| `pin_image_concurrency` | 图片专用并发上限 | 同上 |
+| `tapnow_batch_queue_mode` | `parallel` / `serial` | `parallel` |
+| `tapnow_batch_concurrency` | 并发上限 | `1` |
+| `tapnow_image_concurrency` | 图片专用并发上限 | 同上 |
 
 调度逻辑：
 1. 用户点"生成" → 构造 `GenerationTask` 入队
@@ -200,7 +201,7 @@ src/
 │   ├── canvas.ts           # nodes / connections / undo
 │   ├── tasks.ts            # 任务队列 + 调度
 │   ├── persistence.ts      # IDB / localStorage 适配器
-│   └── prefs.ts            # pin_* 偏好键
+│   └── prefs.ts            # tapnow_* 偏好键
 ├── types/
 │   ├── node.ts             # 判别联合
 │   ├── api.ts              # 请求/响应
@@ -217,7 +218,7 @@ src/
 
 ## 8. 不在 M0~M4 范围、但需要提前留口子的能力
 
-- 模型库管理 UI（`pin_model_library` 的结构）
+- 模型库管理 UI（M5+ 才做，但 `tapnow_model_library` 的结构现在就要定）
 - 性能模式（normal / ultra）→ 现在只读 + 透传，不实装差异化渲染
 - Midjourney 4 张分割图 → 节点输出字段 `mjImages` 先保留
 - Storyboard 多镜头 → 节点 schema 包含 `shots` 数组，但 M2 暂不渲染

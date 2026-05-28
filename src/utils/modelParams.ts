@@ -55,8 +55,6 @@ export function clearParameterValues(modelId: string, parameters: ModelParameter
   for (const param of parameters) {
     const key = `${PARAM_PREFIX}${modelId}_${param.key}`;
     try {
-      localStorage.removeItem(`pin_${key}`);
-      localStorage.removeItem(`ncs_${key}`);
       localStorage.removeItem(`tapnow_${key}`);
     } catch {
       /* noop */

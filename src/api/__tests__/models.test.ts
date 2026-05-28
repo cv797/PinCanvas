@@ -18,7 +18,7 @@ describe('getModelDef', () => {
 
   it('applies provider assignment overrides to default models', () => {
     localStorage.setItem(
-      'pin_model_overrides',
+      'tapnow_model_overrides',
       JSON.stringify({
         'doubao-seedance-2-0-260128': {
           providerAssignment: {

@@ -1,26 +1,9 @@
-const PREFIX = 'pin_';
-const LEGACY_PREFIXES = ['ncs_', 'tapnow_'];
+const PREFIX = 'tapnow_';
 
 export function getPref<T>(key: string, fallback: T): T {
   try {
-    const fullKey = PREFIX + key;
-    let raw = localStorage.getItem(fullKey);
-    if (raw == null) {
-      for (const legacyPrefix of LEGACY_PREFIXES) {
-        const legacy = localStorage.getItem(legacyPrefix + key);
-        if (legacy != null) {
-          try {
-            localStorage.setItem(fullKey, legacy);
-            localStorage.removeItem(legacyPrefix + key);
-          } catch {
-            /* noop */
-          }
-          raw = legacy;
-          break;
-        }
-      }
-    }
-    return raw == null ? fallback : (JSON.parse(raw) as T);
+    const v = localStorage.getItem(PREFIX + key);
+    return v == null ? fallback : (JSON.parse(v) as T);
   } catch {
     return fallback;
   }
@@ -37,9 +20,6 @@ export function setPref<T>(key: string, value: T): void {
 export function removePref(key: string): void {
   try {
     localStorage.removeItem(PREFIX + key);
-    for (const legacyPrefix of LEGACY_PREFIXES) {
-      localStorage.removeItem(legacyPrefix + key);
-    }
   } catch {
     /* noop */
   }

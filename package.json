@@ -1,19 +1,10 @@
 {
-  "name": "pincanvas",
+  "name": "node-canvas-studio",
   "private": false,
   "version": "0.0.1",
   "type": "module",
   "license": "MIT",
-  "description": "Node-based AI canvas studio: visual workflow for image, video, and text generation.",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tdsoc2002/PinCanvas.git"
-  },
-  "homepage": "https://github.com/tdsoc2002/PinCanvas",
-  "bugs": {
-    "url": "https://github.com/tdsoc2002/PinCanvas/issues"
-  },
-  "author": "Tuding Software (图钉软件)",
+  "description": "Node-based AI canvas studio (clean-room rewrite).",
   "scripts": {
     "dev": "vite",
     "dev:server": "PORT=8787 bun server/index.ts",

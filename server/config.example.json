@@ -1,10 +1,10 @@
 {
   "$schema": "./config.schema.json",
   "storage": {
-    "region": "us-east-1",
+    "region": "cn-beijing",
     "bucket": "your-bucket-name",
-    "endpoint": "https://your-s3-endpoint.example.com",
-    "publicBaseUrl": "https://your-bucket.your-cdn.example.com",
+    "endpoint": "https://tos-s3-cn-beijing.volces.com",
+    "publicBaseUrl": "https://your-bucket.tos-cn-beijing.volces.com",
     "accessKeyId": "your-access-key-id",
     "secretAccessKey": "your-secret-access-key",
     "namespaceSalt": "change-this-to-random-string"

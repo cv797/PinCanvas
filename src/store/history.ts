@@ -27,7 +27,7 @@ export interface HistoryEntry {
   error?: string;
 }
 
-const historyStore = createStore('pincanvas-history', 'entries');
+const historyStore = createStore('tapnow-history', 'entries');
 
 interface HistoryState {
   entries: HistoryEntry[];

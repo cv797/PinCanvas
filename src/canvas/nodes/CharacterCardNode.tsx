@@ -51,7 +51,7 @@ export function CharacterCardNodeComp({ id, selected }: NodeProps) {
   if (!settings.inputMode) {
     return (
       <div
-        className={`relative flex h-full w-full flex-col rounded-xl border bg-white shadow-lg shadow-zinc-200/70 transition-colors ${
+        className={`relative flex h-full w-full flex-col overflow-visible rounded-[22px] border bg-white/95 shadow-[0_18px_45px_rgba(24,24,27,0.10)] backdrop-blur transition-colors ${
           selected ? 'border-blue-500' : 'border-zinc-200'
         }`}
       >
@@ -91,7 +91,7 @@ export function CharacterCardNodeComp({ id, selected }: NodeProps) {
 
   return (
     <div
-      className={`relative flex h-full w-full flex-col rounded-xl border bg-white shadow-lg shadow-zinc-200/70 transition-colors ${
+      className={`relative flex h-full w-full flex-col overflow-visible rounded-[22px] border bg-white/95 shadow-[0_18px_45px_rgba(24,24,27,0.10)] backdrop-blur transition-colors ${
         selected ? 'border-blue-500' : 'border-zinc-200'
       }`}
     >

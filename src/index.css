@@ -21,11 +21,112 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.react-flow__node {
+  overflow: visible;
+}
+
 .react-flow__handle {
-  height: 12px;
-  width: 12px;
-  border: 2px solid #3f3f46;
-  background: #18181b;
+  --handle-x: 0px;
+  --handle-y: 0px;
+  height: 44px !important;
+  width: 44px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 1;
+  z-index: 100 !important;
+  transition: opacity 120ms ease;
+}
+
+.react-flow__node .react-flow__handle:not(.canvas-node-top-handle) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.react-flow__node .react-flow__handle.canvas-node-top-handle {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.react-flow__handle-left {
+  left: 0 !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+.react-flow__handle-right {
+  right: 0 !important;
+  transform: translate(50%, -50%) !important;
+}
+
+.react-flow__handle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(47, 128, 255, 0);
+  transition: background 140ms ease;
+}
+
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 14px;
+  width: 14px;
+  border: 2px solid #71717a;
+  border-radius: 999px;
+  background: #fafafa;
+  box-shadow: 0 2px 8px rgba(24, 24, 27, 0.16);
+  transform: translate(calc(-50% + var(--handle-x)), calc(-50% + var(--handle-y))) scale(1);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    height 120ms ease,
+    width 120ms ease;
+}
+
+.react-flow__handle:hover::before,
+.react-flow__handle.canvas-handle-active::before {
+  background: rgba(47, 128, 255, 0.08);
+}
+
+.react-flow__handle:hover::after,
+.react-flow__handle.canvas-handle-active::after {
+  height: 18px;
+  width: 18px;
+  border-color: #2f80ff;
+  box-shadow:
+    0 0 0 5px rgba(47, 128, 255, 0.14),
+    0 8px 18px rgba(37, 99, 235, 0.22);
+  transform: translate(calc(-50% + var(--handle-x)), calc(-50% + var(--handle-y))) scale(1.05);
+}
+
+.react-flow__node.canvas-node-connect-hover {
+  z-index: 20 !important;
+}
+
+.react-flow__node.canvas-node-connect-hover::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: -6px;
+  border: 2px solid #2f80ff;
+  border-radius: 28px;
+  box-shadow:
+    0 0 0 4px rgba(47, 128, 255, 0.16),
+    0 18px 45px rgba(37, 99, 235, 0.2);
+  animation: canvas-connect-target-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes canvas-connect-target-pulse {
+  from {
+    opacity: 0.72;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .react-flow__edge.canvas-edge .react-flow__edge-path {

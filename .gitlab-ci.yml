@@ -1,0 +1,155 @@
+stages:
+  - check
+  - build
+  - deploy
+
+variables:
+  APP_NAME: "node-canvas-studio"
+  APP_PORT: "4010"
+  CONTAINER_PORT: "80"
+  DEPLOY_PATH: "/opt/node-canvas-studio"
+  APK_CACHE_DIR: "/cache/apk"
+  DEPLOY_USER: "root"
+
+.check_apk_cache: &check_apk_cache |
+  mkdir -p "$APK_CACHE_DIR"
+  if ls "$APK_CACHE_DIR"/*.apk >/dev/null 2>&1; then :; fi
+
+precheck:
+  image: alpine:3.20
+  stage: check
+  tags:
+    - docker
+  before_script:
+    - *check_apk_cache
+    - apk add --no-progress --cache-dir "$APK_CACHE_DIR" bash docker-cli openssh-client busybox-extras sshpass
+  script:
+    - |
+      set -euo pipefail
+      docker info >/dev/null
+
+      : "${DEPLOY_HOST:?DEPLOY_HOST is required for remote deploy precheck}"
+      : "${DEPLOY_USER:?DEPLOY_USER is required for remote deploy precheck}"
+      : "${DEPLOY_PASSWORD:?DEPLOY_PASSWORD is required for remote deploy precheck}"
+      SSH_PORT="${DEPLOY_SSH_PORT:-22}"
+
+      nc -z -w3 "$DEPLOY_HOST" "$SSH_PORT"
+      sshpass -p "$DEPLOY_PASSWORD" ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p "$SSH_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -e; docker info >/dev/null; if ss -lnt 2>/dev/null | awk '{print \$4}' | grep -Eq '[:.]$APP_PORT$'; then if ! docker ps --format '{{.Names}}' | grep -Fx '$APP_NAME' >/dev/null; then echo 'APP_PORT is already occupied by another process'; exit 1; fi; fi"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+build_image:
+  image: docker:27-cli
+  stage: build
+  tags:
+    - docker
+  needs:
+    - job: precheck
+  before_script:
+    - *check_apk_cache
+    - apk add --no-progress --cache-dir "$APK_CACHE_DIR" bash docker-cli
+  script:
+    - |
+      set -euo pipefail
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        IMAGE_TAG="$CI_COMMIT_TAG"
+      else
+        IMAGE_TAG="${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
+      fi
+      IMAGE_REPO="${IMAGE_REPO:-$APP_NAME}"
+      IMAGE_REF="${IMAGE_REPO}:${IMAGE_TAG}"
+      echo "IMAGE_REF=$IMAGE_REF" > image.env
+      DOCKER_BUILDKIT=1 docker build --pull -q -t "$IMAGE_REF" . >/dev/null
+      docker save "$IMAGE_REF" | gzip -1 > image.tar.gz
+  artifacts:
+    paths:
+      - image.tar.gz
+    reports:
+      dotenv: image.env
+    expire_in: 1 day
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy_dev_local:
+  image: docker:27-cli
+  stage: deploy
+  tags:
+    - docker
+  needs:
+    - job: build_image
+      artifacts: true
+  before_script:
+    - *check_apk_cache
+    - apk add --no-progress --cache-dir "$APK_CACHE_DIR" bash busybox-extras wget
+  script:
+    - |
+      set -euo pipefail
+      : "${IMAGE_REF:?IMAGE_REF is required from build_image artifact}"
+      : "${CI_PROJECT_DIR:?CI_PROJECT_DIR is required}"
+      test -f "$CI_PROJECT_DIR/image.tar.gz"
+
+      mkdir -p "$DEPLOY_PATH"
+      gunzip -c "$CI_PROJECT_DIR/image.tar.gz" | docker load >/dev/null
+      docker image inspect "$IMAGE_REF" >/dev/null
+      docker rm -f "$APP_NAME" >/dev/null 2>&1 || true
+      docker run -d \
+        --name "$APP_NAME" \
+        --restart always \
+        -p "$APP_PORT:$CONTAINER_PORT" \
+        -e TOS_REGION="${TOS_REGION:-}" \
+        -e TOS_BUCKET="${TOS_BUCKET:-}" \
+        -e TOS_ENDPOINT="${TOS_ENDPOINT:-}" \
+        -e TOS_PUBLIC_BASE_URL="${TOS_PUBLIC_BASE_URL:-}" \
+        -e TOS_ACCESS_KEY_ID="${TOS_ACCESS_KEY_ID:-}" \
+        -e TOS_SECRET_ACCESS_KEY="${TOS_SECRET_ACCESS_KEY:-}" \
+        -e STORAGE_NAMESPACE_SALT="${STORAGE_NAMESPACE_SALT:-}" \
+        -e CANVAS_LINK_SECRET="${CANVAS_LINK_SECRET:-}" \
+        -e REQUIRE_CANVAS_LINK_SIGNATURE="${REQUIRE_CANVAS_LINK_SIGNATURE:-false}" \
+        "$IMAGE_REF" >/dev/null
+
+      for i in $(seq 1 60); do
+        if ! docker ps --format '{{.Names}}' | grep -Fx "$APP_NAME" >/dev/null; then
+          docker inspect "$APP_NAME" --format '{{.State.Status}} {{.State.ExitCode}} {{.State.Error}}' || true
+          docker logs "$APP_NAME" || true
+          exit 1
+        fi
+        if wget -q -T 2 -O - "http://127.0.0.1:$APP_PORT/healthz" 2>/dev/null | grep -qx 'ok'; then
+          exit 0
+        fi
+        sleep 2
+      done
+      docker logs "$APP_NAME" || true
+      exit 1
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+
+deploy_main_remote:
+  image: docker:27-cli
+  stage: deploy
+  tags:
+    - docker
+  needs:
+    - job: build_image
+      artifacts: true
+  before_script:
+    - *check_apk_cache
+    - apk add --no-progress --cache-dir "$APK_CACHE_DIR" bash openssh-client sshpass
+  script:
+    - |
+      set -euo pipefail
+      : "${DEPLOY_HOST:?DEPLOY_HOST is required for remote deploy}"
+      : "${DEPLOY_USER:?DEPLOY_USER is required for remote deploy}"
+      : "${DEPLOY_PASSWORD:?DEPLOY_PASSWORD is required for remote deploy}"
+      : "${IMAGE_REF:?IMAGE_REF is required from build_image artifact}"
+      SSH_PORT="${DEPLOY_SSH_PORT:-22}"
+      : "${CI_PROJECT_DIR:?CI_PROJECT_DIR is required}"
+      test -f "$CI_PROJECT_DIR/image.tar.gz"
+
+      sshpass -p "$DEPLOY_PASSWORD" ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p "$SSH_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+      sshpass -p "$DEPLOY_PASSWORD" scp -q -P "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$CI_PROJECT_DIR/image.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/image.tar.gz"
+
+      sshpass -p "$DEPLOY_PASSWORD" ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p "$SSH_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; gunzip -c '$DEPLOY_PATH/image.tar.gz' | docker load >/dev/null; docker image inspect '$IMAGE_REF' >/dev/null; docker rm -f '$APP_NAME' >/dev/null 2>&1 || true; docker run -d --name '$APP_NAME' --restart always -p '$APP_PORT:$CONTAINER_PORT' -e TOS_REGION='${TOS_REGION:-}' -e TOS_BUCKET='${TOS_BUCKET:-}' -e TOS_ENDPOINT='${TOS_ENDPOINT:-}' -e TOS_PUBLIC_BASE_URL='${TOS_PUBLIC_BASE_URL:-}' -e TOS_ACCESS_KEY_ID='${TOS_ACCESS_KEY_ID:-}' -e TOS_SECRET_ACCESS_KEY='${TOS_SECRET_ACCESS_KEY:-}' -e STORAGE_NAMESPACE_SALT='${STORAGE_NAMESPACE_SALT:-}' -e CANVAS_LINK_SECRET='${CANVAS_LINK_SECRET:-}' -e REQUIRE_CANVAS_LINK_SIGNATURE='${REQUIRE_CANVAS_LINK_SIGNATURE:-false}' '$IMAGE_REF' >/dev/null; for i in \$(seq 1 60); do if ! docker ps --format '{{.Names}}' | grep -Fx '$APP_NAME' >/dev/null; then docker inspect '$APP_NAME' --format '{{.State.Status}} {{.State.ExitCode}} {{.State.Error}}' || true; docker logs '$APP_NAME' || true; exit 1; fi; if wget -q -T 2 -O - \"http://127.0.0.1:$APP_PORT/healthz\" 2>/dev/null | grep -qx 'ok'; then exit 0; fi; sleep 2; done; docker logs '$APP_NAME' || true; exit 1"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'

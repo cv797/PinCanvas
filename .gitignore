@@ -6,13 +6,6 @@ server/config.local.json
 *.tsbuildinfo
 .tapnow-runtime/
 
-# 环境变量与本地配置（含敏感凭证）
-.env
-.env.*
-!.env.example
-server/config.json
-server/config.local.json
-
 # 外部参考产物（版权来源不明，不分发）
 _legacy/
 

@@ -39,7 +39,7 @@ export function Header({
           <Box className="h-5 w-5" />
         </div>
         <span className="whitespace-nowrap text-[17px] font-semibold leading-none text-zinc-900">
-          PinCanvas
+          XXL Canvas
         </span>
       </div>
       <div className="flex items-center gap-1">

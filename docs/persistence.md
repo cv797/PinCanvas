@@ -10,72 +10,72 @@
 ### 1.1 偏好 / 最近使用
 | 键 | 类型 | 含义 |
 |---|---|---|
-| `pin_last_image_model` | string | 上次使用的图片模型 ID（默认 `nano-banana`） |
-| `pin_last_video_model` | string | 上次使用的视频模型 ID（默认 `sora-2`） |
-| `pin_last_analyze_model` | string | 上次使用的视频分析模型 |
-| `pin_last_extract_model` | string | 上次使用的角色 / 场景抽取模型 |
-| `pin_last_ratio` | string | 上次宽高比，如 `16:9` |
-| `pin_last_image_res` | string | 上次图片分辨率 |
-| `pin_last_video_res` | string | 上次视频分辨率 |
-| `pin_last_segment_duration` | string | 上次视频时长 |
-| `pin_chat_model` | string | 默认聊天模型 |
-| `pin_theme` | `'light' \| 'dark'` | 主题 |
+| `tapnow_last_image_model` | string | 上次使用的图片模型 ID（默认 `nano-banana`） |
+| `tapnow_last_video_model` | string | 上次使用的视频模型 ID（默认 `sora-2`） |
+| `tapnow_last_analyze_model` | string | 上次使用的视频分析模型 |
+| `tapnow_last_extract_model` | string | 上次使用的角色 / 场景抽取模型 |
+| `tapnow_last_ratio` | string | 上次宽高比，如 `16:9` |
+| `tapnow_last_image_res` | string | 上次图片分辨率 |
+| `tapnow_last_video_res` | string | 上次视频分辨率 |
+| `tapnow_last_segment_duration` | string | 上次视频时长 |
+| `tapnow_chat_model` | string | 默认聊天模型 |
+| `tapnow_theme` | `'light' \| 'dark'` | 主题 |
 
 ### 1.2 项目结构（仅小型回退快照）
 | 键 | 类型 | 含义 |
 |---|---|---|
-| `pin_project_name` | string | 当前项目名 |
-| `pin_nodes` | JSON | 节点列表（不含 dataURL 图，避免 5MB 上限）|
-| `pin_connections` | JSON | 连线 |
-| `pin_history` | JSON | 撤销栈快照（容量受 max_undo_steps） |
-| `pin_autosave` | `'true' \| 'false'` | 自动保存开关 |
-| `pin_autosave_meta` | JSON | `{ timestamp, storage: 'idb' \| 'local' }` |
-| `pin_max_undo_steps` | string (number) | 撤销栈上限（默认 256） |
+| `tapnow_project_name` | string | 当前项目名 |
+| `tapnow_nodes` | JSON | 节点列表（不含 dataURL 图，避免 5MB 上限）|
+| `tapnow_connections` | JSON | 连线 |
+| `tapnow_history` | JSON | 撤销栈快照（容量受 max_undo_steps） |
+| `tapnow_autosave` | `'true' \| 'false'` | 自动保存开关 |
+| `tapnow_autosave_meta` | JSON | `{ timestamp, storage: 'idb' \| 'local' }` |
+| `tapnow_max_undo_steps` | string (number) | 撤销栈上限（默认 256） |
 
 ### 1.3 队列 / 性能
 | 键 | 类型 | 含义 |
 |---|---|---|
-| `pin_batch_queue_mode` | `'parallel' \| 'serial'` | 队列模式 |
-| `pin_batch_concurrency` | string (number) | 并发上限 |
-| `pin_image_concurrency` | string (number) | 图片专属并发 |
-| `pin_concurrency` | string (number) | 通用并发兜底 |
-| `pin_global_performance_mode` | `'normal' \| 'ultra'` | 性能模式 |
-| `pin_performance_mode` | 同上 | 当前会话模式（运行态镜像） |
-| `pin_history_performance_mode` | 同上 | 历史记录性能模式 |
-| `pin_history_limit` | string (number) | 历史记录上限 |
-| `pin_save_history_assets` | `'true' \| 'false'` | 是否保存历史中的图片 / 视频 |
+| `tapnow_batch_queue_mode` | `'parallel' \| 'serial'` | 队列模式 |
+| `tapnow_batch_concurrency` | string (number) | 并发上限 |
+| `tapnow_image_concurrency` | string (number) | 图片专属并发 |
+| `tapnow_concurrency` | string (number) | 通用并发兜底 |
+| `tapnow_global_performance_mode` | `'normal' \| 'ultra'` | 性能模式 |
+| `tapnow_performance_mode` | 同上 | 当前会话模式（运行态镜像） |
+| `tapnow_history_performance_mode` | 同上 | 历史记录性能模式 |
+| `tapnow_history_limit` | string (number) | 历史记录上限 |
+| `tapnow_save_history_assets` | `'true' \| 'false'` | 是否保存历史中的图片 / 视频 |
 
 ### 1.4 API / Provider
 | 键 | 类型 | 含义 |
 |---|---|---|
-| `pin_global_key` | string | 兜底 API Key（任何 model 未配 apiConfig 时用） |
-| `pin_api_configs` | JSON | `{ [provider]: { url, key, ... } }` |
-| `pin_api_blacklist` | JSON | 临时禁用 endpoint |
-| `pin_api_suspend` | JSON | 临时挂起（冷却中等） |
-| `pin_providers` | JSON | provider 启用状态 |
-| `pin_model_library` | JSON | 用户自定义模型库 |
-| `pin_model_library_collapsed` | `'true' \| 'false'` | UI 折叠态 |
-| `pin_jimeng_use_local_file` | `'true' \| 'false'` | Jimeng 强制本地文件上传 |
-| `pin_native_multi_image_capabilities` | JSON | 多图能力探测缓存 |
+| `tapnow_global_key` | string | 兜底 API Key（任何 model 未配 apiConfig 时用） |
+| `tapnow_api_configs` | JSON | `{ [provider]: { url, key, ... } }` |
+| `tapnow_api_blacklist` | JSON | 临时禁用 endpoint |
+| `tapnow_api_suspend` | JSON | 临时挂起（冷却中等） |
+| `tapnow_providers` | JSON | provider 启用状态 |
+| `tapnow_model_library` | JSON | 用户自定义模型库 |
+| `tapnow_model_library_collapsed` | `'true' \| 'false'` | UI 折叠态 |
+| `tapnow_jimeng_use_local_file` | `'true' \| 'false'` | Jimeng 强制本地文件上传 |
+| `tapnow_native_multi_image_capabilities` | JSON | 多图能力探测缓存 |
 
 ### 1.5 本地服务
 | 键 | 类型 | 含义 |
 |---|---|---|
-| `pin_local_server_url` | string | 本地缓存服务 URL（如 ComfyUI / 自建） |
-| `pin_local_cache_enabled` | `'true' \| 'false'` | 是否启用本地缓存 |
-| `pin_cache_redownload_on_enable` | `'true' \| 'false'` | 启用时是否重新下载 |
-| `pin_show_local_cache_banner` | `'true' \| 'false'` | 显示提示条 |
+| `tapnow_local_server_url` | string | 本地缓存服务 URL（如 ComfyUI / 自建） |
+| `tapnow_local_cache_enabled` | `'true' \| 'false'` | 是否启用本地缓存 |
+| `tapnow_cache_redownload_on_enable` | `'true' \| 'false'` | 启用时是否重新下载 |
+| `tapnow_show_local_cache_banner` | `'true' \| 'false'` | 显示提示条 |
 
 ### 1.6 其他
 | 键 | 类型 | 含义 |
 |---|---|---|
-| `pin_images_db` | string | 图片缓存 IDB 数据库名 |
-| `pin_autosave_db` | string | 自动保存 IDB 数据库名 |
-| `pin_chat_sessions` | JSON | 聊天会话列表 |
-| `pin_characters` | JSON | 角色库缓存 |
-| `pin_prompt_library` | JSON | 提示词库 |
-| `pin_asset_bundle_meta` | JSON | 资源包元数据 |
-| `pin_debug_storyboard` | `'true' \| 'false'` | 调试分镜开关 |
+| `tapnow_images_db` | string | 图片缓存 IDB 数据库名 |
+| `tapnow_autosave_db` | string | 自动保存 IDB 数据库名 |
+| `tapnow_chat_sessions` | JSON | 聊天会话列表 |
+| `tapnow_characters` | JSON | 角色库缓存 |
+| `tapnow_prompt_library` | JSON | 提示词库 |
+| `tapnow_asset_bundle_meta` | JSON | 资源包元数据 |
+| `tapnow_debug_storyboard` | `'true' \| 'false'` | 调试分镜开关 |
 
 ## 2. IndexedDB
 
@@ -83,8 +83,8 @@
 // src/store/persistence.ts
 import { createStore, get, set, del, keys } from 'idb-keyval';
 
-const autosaveDb = createStore('pincanvas-autosave', 'snapshots');
-const imagesDb   = createStore('pincanvas-images',   'assets');
+const autosaveDb = createStore('tapnow-autosave', 'snapshots');
+const imagesDb   = createStore('tapnow-images',   'assets');
 
 // 项目快照（完整）
 interface ProjectSnapshot {
@@ -98,7 +98,7 @@ interface ProjectSnapshot {
 }
 ```
 
-**两种持久化策略**（按 `pin_save_history_assets` 开关）：
+**两种持久化策略**（按 `tapnow_save_history_assets` 开关）：
 
 | 模式 | nodes 内的 image 字段 | assets 表 |
 |---|---|---|
@@ -109,7 +109,7 @@ interface ProjectSnapshot {
 
 ```
 应用启动
-  ├─ 读 pin_autosave_meta → 找到最近快照
+  ├─ 读 tapnow_autosave_meta → 找到最近快照
   ├─ 从 IDB 加载 ProjectSnapshot
   ├─ hydrate Zustand store
   └─ 设置 store.subscribe(debouncedSave)
@@ -117,14 +117,14 @@ interface ProjectSnapshot {
 debouncedSave (1.5s)
   ├─ 序列化 store → ProjectSnapshot
   ├─ 写 IDB
-  ├─ 写 localStorage：pin_autosave_meta = { timestamp, storage: 'idb' }
-  └─ 写 localStorage：pin_nodes / pin_connections（去图片版，作为兜底）
+  ├─ 写 localStorage：tapnow_autosave_meta = { timestamp, storage: 'idb' }
+  └─ 写 localStorage：tapnow_nodes / tapnow_connections（去图片版，作为兜底）
 ```
 
 ## 4. 迁移：从 _legacy/ HTML 到新工程
 
-新工程**复用所有 `pin_*` 键**，因此：
-- 首次启动检查 `pin_nodes` / `pin_connections` / IDB `pincanvas-autosave`
+新工程**复用所有 `tapnow_*` 键**，因此：
+- 首次启动检查 `tapnow_nodes` / `tapnow_connections` / IDB `tapnow-autosave`
 - 若旧数据存在 → 调用 `migrate(v0 → v1)` 把旧节点 `settings` 字段映射到新 `kind` 判别联合
 - 显示一次性提示："已从旧版本恢复 N 个节点"
 

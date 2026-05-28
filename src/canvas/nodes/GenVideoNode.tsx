@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { AtSign, Music2, Video } from 'lucide-react';
+import { AtSign, BookOpen, Music2, SlidersHorizontal, Video, Zap } from 'lucide-react';
 import { getModelDisplayName } from '@/api/models';
 import {
   FEATURE_DISABLED_MESSAGE,
@@ -18,7 +18,6 @@ import {
   videoRatioOptions,
   videoResolutionOptions,
 } from '@/utils/videoModelOptions';
-import { frameClass, NODE_BODY, NODE_HEADER } from './shared';
 
 type MentionMediaType = 'image' | 'video' | 'audio';
 
@@ -48,7 +47,7 @@ function typeLabel(type: MentionMediaType): string {
 function createMentionCardHtml(item: MentionCandidate): string {
   const media = item.type === 'image'
     ? `<img src="${escapeAttr(item.previewUrl || item.url)}" alt="" style="width:22px;height:22px;border-radius:5px;object-fit:cover;display:inline-block;flex-shrink:0;" />`
-    : `<span style="display:inline-flex;width:22px;height:22px;border-radius:5px;align-items:center;justify-content:center;background:#e5e7eb;color:${item.type === 'video' ? '#374151' : '#2563eb'};font-size:12px;line-height:1;">${item.type === 'video' ? '▶' : '♪'}</span>`;
+    : `<span style="display:inline-flex;width:22px;height:22px;border-radius:5px;align-items:center;justify-content:center;background:#e5e7eb;color:${item.type === 'video' ? '#374151' : '#2563eb'};font-size:12px;line-height:1;">${item.type === 'video' ? 'V' : 'A'}</span>`;
   return `<span contenteditable="false" data-mention="media" data-mention-type="${item.type}" data-mention-label="${escapeAttr(item.label)}" data-mention-url="${escapeAttr(item.url)}" style="display:inline-flex;align-items:center;gap:4px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;padding:2px 7px;margin:0 2px;cursor:default;user-select:none;vertical-align:middle;white-space:nowrap;font-size:12px;color:#374151;">${media}<span>${escapeHtml(item.label)}</span></span>&nbsp;`;
 }
 
@@ -123,32 +122,134 @@ function shouldKeepMentionOpen(root: HTMLElement): boolean {
   return /(^|\s)@$/.test(before);
 }
 
-function ReferenceMediaCard({ item }: { item: MentionCandidate }) {
+function VideoSettingsPanel({
+  ratio,
+  resolution,
+  duration,
+  ratioOptions,
+  resolutionOptions,
+  durationOptions,
+  onChange,
+}: {
+  ratio?: string;
+  resolution?: string;
+  duration?: string | number;
+  ratioOptions: string[];
+  resolutionOptions: string[];
+  durationOptions: string[];
+  onChange: (patch: Partial<GenVideoNodeT['settings']>) => void;
+}) {
+  const activeRatio = ratio ?? '16:9';
+  const activeResolution = resolution ?? '720p';
+  const activeDuration = String(duration ?? '5s');
+
   return (
-    <div className="group relative h-16 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-      <div className="h-full w-full">
-        {item.type === 'image' ? (
-          <img
-            src={item.previewUrl || item.url}
-            alt={item.label}
-            className="h-full w-full object-cover"
-            draggable={false}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-zinc-100 text-zinc-500">
-            {item.type === 'video' ? (
-              <Video className="h-5 w-5" />
-            ) : (
-              <Music2 className="h-5 w-5 text-blue-600" />
-            )}
-          </div>
-        )}
-      </div>
-      <div className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-center text-[10px] font-medium leading-tight text-white">
-        {item.label}
-      </div>
+    <div
+      className="absolute bottom-[calc(100%+12px)] left-1/2 z-[220] w-[360px] -translate-x-1/2 rounded-[24px] bg-white p-5 text-zinc-900 shadow-[0_22px_70px_rgba(28,25,23,0.20)]"
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <h3 className="text-xl font-semibold leading-7">视频设置</h3>
+      <SettingSection title="清晰度">
+        <div className="grid grid-cols-3 gap-3">
+          {resolutionOptions.map((option) => (
+            <OptionButton
+              key={option}
+              selected={activeResolution === option}
+              onClick={() => onChange({ resolution: option })}
+            >
+              {option}
+            </OptionButton>
+          ))}
+        </div>
+      </SettingSection>
+      <SettingSection title="尺寸">
+        <div className="grid grid-cols-3 gap-3">
+          {ratioOptions.map((option) => (
+            <OptionButton
+              key={option}
+              selected={activeRatio === option}
+              onClick={() => onChange({ ratio: option })}
+            >
+              <span className="text-base font-semibold">{ratioDisplay(option)}</span>
+              <span className="text-xs text-zinc-500">{option}</span>
+            </OptionButton>
+          ))}
+        </div>
+      </SettingSection>
+      <SettingSection title="秒数">
+        <div className="grid grid-cols-3 gap-3">
+          {durationOptions.map((option) => (
+            <OptionButton
+              key={option}
+              selected={activeDuration === option}
+              onClick={() => onChange({ duration: option })}
+            >
+              {durationDisplay(option)}
+            </OptionButton>
+          ))}
+        </div>
+      </SettingSection>
     </div>
   );
+}
+
+function SettingSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-5">
+      <div className="mb-2 text-sm font-medium text-zinc-500">{title}</div>
+      {children}
+    </section>
+  );
+}
+
+function OptionButton({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`flex min-h-14 flex-col items-center justify-center rounded-[18px] border px-3 py-2 text-base transition ${
+        selected
+          ? 'border-zinc-900 bg-white text-zinc-900'
+          : 'border-zinc-200 bg-white text-zinc-800 hover:border-zinc-400'
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ratioDisplay(value?: string): string {
+  switch (value) {
+    case '16:9':
+      return '横屏';
+    case '9:16':
+      return '竖屏';
+    case '1:1':
+      return '方形';
+    case '21:9':
+      return '宽屏';
+    case '4:3':
+      return '标准';
+    case '3:4':
+      return '长图';
+    default:
+      return value || 'auto';
+  }
+}
+
+function durationDisplay(value?: string | number): string {
+  const text = String(value ?? '5s');
+  return text.endsWith('s') ? text : `${text}s`;
 }
 
 function PromptMentionEditor({
@@ -247,7 +348,7 @@ function PromptMentionEditor({
     <div className="relative">
       <div
         ref={editorRef}
-        className="nodrag min-h-20 max-h-32 overflow-y-auto rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs leading-5 text-zinc-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)]"
+        className="nodrag min-h-28 max-h-40 overflow-y-auto rounded-[18px] border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-sm leading-6 text-zinc-800 shadow-inner outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100 empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)]"
         contentEditable={!disabled}
         suppressContentEditableWarning
         data-placeholder={placeholder}
@@ -347,6 +448,8 @@ export function GenVideoNodeComp({ id, selected }: NodeProps) {
   const upstream = useUpstream(nid);
   const task = useNodeTask(nid);
   const trigger = useGenerationTrigger();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRootRef = useRef<HTMLDivElement>(null);
   const isBusy = task?.status === 'pending' || task?.status === 'running';
   const currentSettings = node?.kind === 'gen-video' ? node.settings : undefined;
   const selectedModel = currentSettings
@@ -408,6 +511,19 @@ export function GenVideoNodeComp({ id, selected }: NodeProps) {
     }
   }, [durationOptions, isBusy, nid, node, patchSettings, ratioOptions, resolutionOptions]);
 
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const closeSettingsOnly = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && settingsRootRef.current?.contains(target)) return;
+      event.stopPropagation();
+      event.preventDefault();
+      setSettingsOpen(false);
+    };
+    window.addEventListener('pointerdown', closeSettingsOnly, true);
+    return () => window.removeEventListener('pointerdown', closeSettingsOnly, true);
+  }, [settingsOpen]);
+
   if (!node || node.kind !== 'gen-video') return null;
   const settings = node.settings;
   const omniDisabled = isWan27I2V(settings.model);
@@ -427,190 +543,139 @@ export function GenVideoNodeComp({ id, selected }: NodeProps) {
   const disabled = !isNodeFeatureEnabled(node.kind);
 
   return (
-    <div className={frameClass(selected)}>
-      <Handle type="target" position={Position.Left} />
-      <Handle type="source" position={Position.Right} />
-      <div className={NODE_HEADER}>
-        <span>视频生成</span>
-        <span className="ml-auto truncate text-zinc-400">
-          {selectedModel ? getModelDisplayName(selectedModel) : settings.model}
-        </span>
+    <div className="relative h-full w-full overflow-visible">
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-4 !w-4 !border-2 !border-zinc-500 !bg-white"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-4 !w-4 !border-2 !border-zinc-500 !bg-white"
+      />
+      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[22px] border border-zinc-200 bg-zinc-100 text-zinc-400 shadow-[0_18px_45px_rgba(24,24,27,0.10)]">
+        {node.content ? (
+          <video src={node.content} controls className="h-full w-full bg-black object-contain" />
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <Video className="h-7 w-7 opacity-30" />
+            <span className="text-sm">视频节点</span>
+          </div>
+        )}
       </div>
-      <div className={`${NODE_BODY} flex flex-col gap-1.5 overflow-y-auto px-2 py-1.5`}>
-        <select
-          className="nodrag rounded border border-zinc-200 bg-white px-1.5 py-1 text-xs"
-          value={settings.model}
-          onChange={(e) =>
-            patchSettings<'gen-video'>(nid, {
-              model: e.target.value,
-              videoMode: isWan27I2V(e.target.value)
-                ? 'first-last-frame'
-                : isHappyHorse(e.target.value)
-                  ? 'omni-reference'
-                  : videoMode,
-            })
-          }
-          disabled={isBusy}
+      {selected && (
+        <div
+          className="nodrag absolute left-1/2 top-[calc(100%+28px)] z-[160] w-[min(560px,calc(100vw-48px))] -translate-x-1/2 rounded-[22px] border border-zinc-200 bg-white/95 p-3 shadow-[0_18px_54px_rgba(28,25,23,0.16)] backdrop-blur"
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
-          {VIDEO_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {getModelDisplayName(m)}
-            </option>
-          ))}
-        </select>
-        <PromptMentionEditor
-          value={settings.videoPrompt}
-          html={settings.videoPromptHtml}
-          placeholder={upstream.prompt ? `(上游 prompt: ${upstream.prompt})` : 'video prompt，输入 @ 调用参考素材'}
-          candidates={mentionCandidates}
-          disabled={isBusy}
-          onChange={({ text, html }) =>
-            patchSettings<'gen-video'>(nid, {
-              videoPrompt: text,
-              videoPromptHtml: html,
-            })
-          }
-        />
-        <div className="grid grid-cols-2 gap-1 rounded border border-zinc-200 bg-zinc-50 p-1">
-          <button
-            type="button"
-            className={`nodrag rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-              firstLastDisabled
-                ? 'cursor-not-allowed text-zinc-400'
-                : videoMode === 'first-last-frame'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-zinc-600 hover:bg-white'
-            }`}
-            onClick={() =>
-              !firstLastDisabled &&
-              patchSettings<'gen-video'>(nid, { videoMode: 'first-last-frame' })
-            }
-            disabled={isBusy || firstLastDisabled}
-            title={firstLastDisabled ? 'HappyHorse 不支持首尾帧模式' : undefined}
-          >
-            首尾帧
-          </button>
-          <button
-            type="button"
-            className={`nodrag rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-              omniDisabled
-                ? 'cursor-not-allowed text-zinc-400'
-                : videoMode === 'omni-reference'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-zinc-600 hover:bg-white'
-            }`}
-            onClick={() =>
-              !omniDisabled &&
+          <PromptMentionEditor
+            value={settings.videoPrompt}
+            html={settings.videoPromptHtml}
+            placeholder={upstream.prompt ? `(上游 prompt: ${upstream.prompt})` : '描述要生成的视频内容'}
+            candidates={mentionCandidates}
+            disabled={isBusy}
+            onChange={({ text, html }) =>
               patchSettings<'gen-video'>(nid, {
-                videoMode: 'omni-reference',
+                videoPrompt: text,
+                videoPromptHtml: html,
               })
             }
-            disabled={isBusy || omniDisabled}
-            title={omniDisabled ? 'wan2.7-i2v 不支持全能参考多图，请使用可灵模型' : undefined}
-          >
-            全能参考
-          </button>
+          />
+          <div className="mt-3 flex min-w-0 items-center gap-2">
+            <BookOpen className="h-4 w-4 shrink-0 text-zinc-700" />
+            <select
+              className="h-10 min-w-0 flex-1 rounded-full border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm outline-none hover:bg-zinc-50"
+              value={settings.model}
+              onChange={(e) =>
+                patchSettings<'gen-video'>(nid, {
+                  model: e.target.value,
+                  videoMode: isWan27I2V(e.target.value)
+                    ? 'first-last-frame'
+                    : isHappyHorse(e.target.value)
+                      ? 'omni-reference'
+                      : videoMode,
+                })
+              }
+              disabled={isBusy}
+            >
+              {VIDEO_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {getModelDisplayName(m)}
+                </option>
+              ))}
+            </select>
+            <div className="flex h-10 shrink-0 items-center rounded-full bg-zinc-100 p-1 shadow-inner">
+              <button
+                type="button"
+                className={`h-8 rounded-full px-3 text-sm font-medium transition ${
+                  videoMode === 'first-last-frame'
+                    ? 'bg-white text-zinc-950 shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900'
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+                onClick={() => patchSettings<'gen-video'>(nid, { videoMode: 'first-last-frame' })}
+                disabled={isBusy || firstLastDisabled}
+                title={firstLastDisabled ? '当前模型不支持首尾帧模式' : undefined}
+              >
+                首尾帧
+              </button>
+              <button
+                type="button"
+                className={`h-8 rounded-full px-3 text-sm font-medium transition ${
+                  videoMode === 'omni-reference'
+                    ? 'bg-white text-zinc-950 shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900'
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+                onClick={() => patchSettings<'gen-video'>(nid, { videoMode: 'omni-reference' })}
+                disabled={isBusy || omniDisabled}
+                title={omniDisabled ? '当前模型不支持全能参考模式' : undefined}
+              >
+                全能参考
+              </button>
+            </div>
+            <div ref={settingsRootRef} className="relative">
+              <button
+                type="button"
+                className="flex h-10 items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 px-4 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-200"
+                onClick={() => setSettingsOpen((open) => !open)}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                {settings.resolution ?? '720p'} / {ratioDisplay(settings.ratio)} / {durationDisplay(settings.duration)}
+              </button>
+              {settingsOpen && (
+                <VideoSettingsPanel
+                  ratio={settings.ratio}
+                  resolution={settings.resolution}
+                  duration={settings.duration}
+                  ratioOptions={ratioOptions}
+                  resolutionOptions={resolutionOptions}
+                  durationOptions={durationOptions}
+                  onChange={(patch) => patchSettings<'gen-video'>(nid, patch)}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              className="flex h-10 items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-100 px-4 text-sm font-semibold text-zinc-500 shadow-sm hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={disabled || isBusy}
+              title={disabled ? FEATURE_DISABLED_MESSAGE : '生成视频'}
+              onClick={() => trigger(nid)}
+            >
+              <Zap className="h-4 w-4" />
+              {isBusy ? '生成中' : '生成'}
+            </button>
+          </div>
+          {(mentionCandidates.length > 0 || task?.error || disabled) && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+              {mentionCandidates.length > 0 && <span>{modeHint}</span>}
+              {task?.error && <span className="text-red-600">{task.error}</span>}
+              {disabled && <span className="text-amber-700">{FEATURE_DISABLED_MESSAGE}</span>}
+            </div>
+          )}
         </div>
-        {omniDisabled && (
-          <div className="rounded bg-amber-50 px-1.5 py-1 text-[11px] text-amber-700">
-            wan2.7-i2v 不支持全能参考多图，已禁用该模式
-          </div>
-        )}
-        {firstLastDisabled && (
-          <div className="rounded bg-amber-50 px-1.5 py-1 text-[11px] text-amber-700">
-            HappyHorse 不支持首尾帧模式，已切换为全能参考
-          </div>
-        )}
-        <div className="flex gap-1">
-          <select
-            className="nodrag flex-1 rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
-            value={String(settings.duration ?? '5s')}
-            onChange={(e) => patchSettings<'gen-video'>(nid, { duration: e.target.value })}
-            disabled={isBusy}
-          >
-            {durationOptions.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-          <select
-            className="nodrag flex-1 rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
-            value={settings.ratio ?? '16:9'}
-            onChange={(e) => patchSettings<'gen-video'>(nid, { ratio: e.target.value })}
-            disabled={isBusy}
-          >
-            {ratioOptions.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-          <select
-            className="nodrag flex-1 rounded border border-zinc-200 bg-white px-1.5 py-1 text-[11px]"
-            value={settings.resolution ?? '720p'}
-            onChange={(e) => patchSettings<'gen-video'>(nid, { resolution: e.target.value })}
-            disabled={isBusy}
-          >
-            {resolutionOptions.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </div>
-        {mentionCandidates.length > 0 && (
-          <div className="flex flex-col gap-1 rounded border border-zinc-200 bg-zinc-50 p-1">
-            {refs.length > 0 && (
-              <div className="flex items-center gap-1 overflow-x-auto">
-                {mentionCandidates
-                  .filter((item) => item.type === 'image')
-                  .slice(0, videoMode === 'first-last-frame' ? 2 : 5)
-                  .map((item) => (
-                    <ReferenceMediaCard key={item.id} item={item} />
-                  ))}
-              </div>
-            )}
-            {(upstream.videoUrl || upstream.audioUrls.length > 0) && (
-              <div className="flex items-center gap-1 overflow-x-auto">
-                {mentionCandidates
-                  .filter((item) => item.type !== 'image')
-                  .slice(0, 4)
-                  .map((item) => (
-                    <ReferenceMediaCard key={item.id} item={item} />
-                  ))}
-              </div>
-            )}
-            <span className="text-[11px] text-zinc-400">{modeHint}</span>
-          </div>
-        )}
-        {refs.length === 0 && upstream.audioUrls.length === 0 && (
-          <div className="rounded bg-zinc-50 px-1.5 py-1 text-[11px] text-zinc-500">
-            {videoMode === 'first-last-frame'
-              ? '连接 2 张图片作为首帧和尾帧'
-              : '可连接图片或视频输入作为参考'}
-          </div>
-        )}
-        {task?.error && (
-          <div className="rounded bg-red-50 px-1.5 py-1 text-[11px] text-red-700">
-            {task.error}
-          </div>
-        )}
-        {disabled && (
-          <div className="rounded bg-amber-50 px-1.5 py-1 text-[11px] font-medium text-amber-700">
-            {FEATURE_DISABLED_MESSAGE}
-          </div>
-        )}
-        <button
-          type="button"
-          className="nodrag rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
-          disabled={disabled || isBusy}
-          title={disabled ? FEATURE_DISABLED_MESSAGE : '生成视频'}
-          onClick={() => trigger(nid)}
-        >
-          {isBusy ? '生成中...' : '生成视频'}
-        </button>
-      </div>
+      )}
     </div>
   );
 }

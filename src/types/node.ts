@@ -93,6 +93,7 @@ export interface GenImageNode extends NodeBase {
     resolution?: string;
     width?: number | '';
     height?: number | '';
+    quality?: string;
     /** 一次生成 N 张图片。 */
     count?: number;
     referenceImages?: string[];

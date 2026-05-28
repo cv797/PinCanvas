@@ -3,6 +3,8 @@ import {
   Controls,
   MiniMap,
   NodeResizer,
+  Handle,
+  Position,
   ReactFlow,
   type EdgeChange,
   type Node as RFNode,
@@ -16,8 +18,16 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { X } from 'lucide-react';
-import { type ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Info, MessageSquare, Play, Trash2 } from 'lucide-react';
+import {
+  type ComponentType,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createInputImageFromDataURL, createNode } from '@/canvas/factory';
 import {
   FEATURE_DISABLED_MESSAGE,
@@ -27,6 +37,7 @@ import { useCanvas, useTemporal } from '@/store/canvas';
 import { getHistoryImageDragData, hasHistoryImageDragData } from '@/utils/drag';
 import { fileToDataURL } from '@/utils/image';
 import { edgeId } from '@/utils/id';
+import { useGenerationTrigger } from '@/hooks/useGenerationTrigger';
 import type { AppEdge } from '@/types/edge';
 import type { AppNode, NodeId, NodeKind } from '@/types/node';
 import { AudioInputNodeComp } from './nodes/AudioInputNode';
@@ -59,6 +70,7 @@ function withNodeChrome(Component: ComponentType<any>) {
     const node = useCanvas((s) => s.nodes.find((item) => item.id === id));
     const setSelection = useCanvas((s) => s.setSelection);
     const removeNode = useCanvas((s) => s.removeNode);
+    const trigger = useGenerationTrigger();
     const isSelected = props.selected || selectedIds.includes(id);
     const kind = node?.kind ?? (props.type as NodeKind | undefined);
     const featureDisabled = kind ? !isNodeFeatureEnabled(kind) : false;
@@ -70,23 +82,48 @@ function withNodeChrome(Component: ComponentType<any>) {
           if (shouldSelectNodeFromPointerDown(event)) setSelection([id]);
         }}
       >
+        {kind && nodeHasTargetHandle(kind) && (
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="canvas-node-top-handle"
+          />
+        )}
+        {kind && nodeHasSourceHandle(kind) && (
+          <Handle
+            type="source"
+            position={Position.Right}
+            className="canvas-node-top-handle"
+          />
+        )}
         <NodeResizer
           isVisible={isSelected}
           minWidth={160}
           minHeight={120}
           lineClassName="!border-blue-500"
-          handleClassName="!h-2.5 !w-2.5 !border-blue-500 !bg-white"
+          handleClassName="!h-3 !w-3 !rounded-full !border-2 !border-blue-500 !bg-white !shadow-sm"
         />
         <div
-          className={`pointer-events-none absolute inset-0 z-10 rounded-xl transition-all ${
+          className={`pointer-events-none absolute inset-0 z-[1] rounded-[24px] transition-all ${
             isSelected
-              ? 'border border-blue-500 shadow-[0_18px_45px_rgba(37,99,235,0.18)] ring-2 ring-blue-500/20'
+              ? 'border-2 border-blue-500 shadow-[0_0_0_1px_rgba(47,128,255,0.22),0_18px_45px_rgba(37,99,235,0.16)]'
               : 'border border-transparent'
           }`}
         />
+        {isSelected && (
+          <NodeHoverToolbar
+            node={node}
+            onInfo={() => showNodeInfo(node)}
+            onEdit={() => setSelection([id])}
+            onGenerate={() => {
+              if (node && canTriggerNode(node.kind)) trigger(id);
+            }}
+            onDelete={() => removeNode(id)}
+          />
+        )}
         <button
           type="button"
-          className={`nodrag absolute -right-3 -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-white shadow-md transition-all hover:scale-105 hover:text-zinc-700 ${
+          className={`nodrag absolute -right-3 -top-3 z-20 hidden h-7 w-7 items-center justify-center rounded-full border bg-white shadow-md transition-all hover:scale-105 hover:text-zinc-700 ${
             isSelected
               ? 'border-blue-200 text-zinc-500 opacity-100'
               : 'pointer-events-none border-zinc-200 text-zinc-400 opacity-0'
@@ -98,7 +135,7 @@ function withNodeChrome(Component: ComponentType<any>) {
           aria-label="删除节点"
           title="删除节点"
         >
-          <X className="h-4 w-4" />
+          <Trash2 className="h-4 w-4" />
         </button>
         <Component {...props} selected={isSelected} />
         {featureDisabled && (
@@ -109,6 +146,144 @@ function withNodeChrome(Component: ComponentType<any>) {
       </div>
     );
   };
+}
+
+function NodeHoverToolbar({
+  node,
+  onInfo,
+  onEdit,
+  onGenerate,
+  onDelete,
+}: {
+  node: AppNode | undefined;
+  onInfo: () => void;
+  onEdit: () => void;
+  onGenerate: () => void;
+  onDelete: () => void;
+}) {
+  const canGenerate = node ? canTriggerNode(node.kind) : false;
+  return (
+    <div
+      className="nodrag absolute left-1/2 top-0 z-30 flex h-12 -translate-x-1/2 -translate-y-[calc(100%+14px)] items-center overflow-hidden rounded-[18px] border border-black/10 bg-white text-[15px] text-zinc-900 shadow-[0_10px_30px_rgba(15,23,42,0.14)]"
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <ToolbarButton title="节点信息" label="信息" onClick={onInfo} icon={<Info className="h-4 w-4" />} />
+      <ToolbarButton
+        title="删除节点"
+        label="删除"
+        onClick={onDelete}
+        icon={<Trash2 className="h-4 w-4" />}
+        danger
+      />
+      <span className="mx-1 h-7 w-px bg-zinc-200" />
+      <ToolbarButton title="编辑节点" label="编辑" onClick={onEdit} icon={<MessageSquare className="h-4 w-4" />} />
+      {canGenerate && (
+        <ToolbarButton title="生成" label="生成" onClick={onGenerate} icon={<Play className="h-4 w-4" />} />
+      )}
+    </div>
+  );
+}
+
+function ToolbarButton({
+  title,
+  label,
+  icon,
+  onClick,
+  danger = false,
+}: {
+  title: string;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`flex h-12 items-center px-1.5 ${danger ? 'text-red-600' : 'text-zinc-900'}`}
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+    >
+      <span className="flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 transition hover:bg-zinc-100">
+        {icon}
+        <span>{label}</span>
+      </span>
+    </button>
+  );
+}
+
+function canTriggerNode(kind: NodeKind): boolean {
+  return (
+    kind === 'gen-image' ||
+    kind === 'gen-video' ||
+    kind === 'generate-character-image' ||
+    kind === 'generate-scene-image' ||
+    kind === 'generate-character-video' ||
+    kind === 'generate-scene-video' ||
+    kind === 'extract-characters-scenes' ||
+    kind === 'character-card'
+  );
+}
+
+function nodeHasTargetHandle(kind: NodeKind): boolean {
+  return (
+    kind === 'gen-image' ||
+    kind === 'gen-video' ||
+    kind === 'preview' ||
+    kind === 'image-compare' ||
+    kind === 'video-analyze' ||
+    kind === 'pending-node-picker' ||
+    kind === 'generate-character-image' ||
+    kind === 'generate-scene-image' ||
+    kind === 'generate-character-video' ||
+    kind === 'generate-scene-video' ||
+    kind === 'extract-characters-scenes' ||
+    kind === 'storyboard-node' ||
+    kind === 'script-to-storyboard' ||
+    kind === 'storyboard-viewer' ||
+    kind === 'chat' ||
+    kind === 'character-card'
+  );
+}
+
+function nodeHasSourceHandle(kind: NodeKind): boolean {
+  return (
+    kind === 'input-image' ||
+    kind === 'audio-input' ||
+    kind === 'text-node' ||
+    kind === 'gen-image' ||
+    kind === 'gen-video' ||
+    kind === 'video-input' ||
+    kind === 'image-compare' ||
+    kind === 'video-analyze' ||
+    kind === 'create-character' ||
+    kind === 'create-scene' ||
+    kind === 'generate-character-image' ||
+    kind === 'generate-scene-image' ||
+    kind === 'generate-character-video' ||
+    kind === 'generate-scene-video' ||
+    kind === 'extract-characters-scenes' ||
+    kind === 'storyboard-node' ||
+    kind === 'script-to-storyboard' ||
+    kind === 'storyboard-viewer' ||
+    kind === 'chat' ||
+    kind === 'character-card'
+  );
+}
+
+function showNodeInfo(node: AppNode | undefined): void {
+  if (!node) return;
+  window.alert(
+    [
+      `类型：${node.kind}`,
+      `ID：${node.id}`,
+      `尺寸：${Math.round(node.width)} x ${Math.round(node.height)}`,
+      `位置：${Math.round(node.x)}, ${Math.round(node.y)}`,
+    ].join('\n'),
+  );
 }
 
 function shouldSelectNodeFromPointerDown(event: React.PointerEvent<HTMLElement>): boolean {
@@ -168,7 +343,7 @@ type ContextMenuState =
   | { type: 'edge'; x: number; y: number; edgeId: string }
   | null;
 
-function toFlowNode(n: AppNode): RFNode {
+function toFlowNode(n: AppNode, connectHoverTargetId: NodeId | null): RFNode {
   const selected = useCanvas.getState().selectedIds.includes(n.id);
   return {
     id: n.id,
@@ -178,6 +353,7 @@ function toFlowNode(n: AppNode): RFNode {
     width: n.width,
     height: n.height,
     selected,
+    className: n.id === connectHoverTargetId ? 'canvas-node-connect-hover' : undefined,
   };
 }
 
@@ -213,6 +389,16 @@ function findDropTarget(nodes: AppNode[], x: number, y: number): AppNode | null 
   return null;
 }
 
+function findConnectTarget(nodes: AppNode[], x: number, y: number, sourceId: NodeId): AppNode | null {
+  for (const node of [...nodes].reverse()) {
+    if (node.id === sourceId) continue;
+    if (x < node.x || y < node.y) continue;
+    if (x > node.x + node.width || y > node.y + node.height) continue;
+    return node;
+  }
+  return null;
+}
+
 export function Canvas() {
   const nodes = useCanvas((s) => s.nodes);
   const edges = useCanvas((s) => s.edges);
@@ -226,10 +412,14 @@ export function Canvas() {
   const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
   const [menu, setMenu] = useState<ContextMenuState>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [connectHoverTargetId, setConnectHoverTargetId] = useState<NodeId | null>(null);
   const connectionSourceIdRef = useRef<NodeId | null>(null);
   const suppressNextCanvasClickRef = useRef(false);
 
-  const flowNodes = useMemo(() => nodes.map(toFlowNode), [nodes, selectedIds]);
+  const flowNodes = useMemo(
+    () => nodes.map((node) => toFlowNode(node, connectHoverTargetId)),
+    [nodes, selectedIds, connectHoverTargetId],
+  );
   const flowEdges = useMemo(
     () => edges.map((edge) => toFlowEdge(edge, selectedEdgeId)),
     [edges, selectedEdgeId],
@@ -280,12 +470,14 @@ export function Canvas() {
       if (!c.source || !c.target || c.source === c.target) return;
       addEdge({ id: edgeId(), from: c.source as NodeId, to: c.target as NodeId });
       setSelectedEdgeId(null);
+      setConnectHoverTargetId(null);
     },
     [addEdge],
   );
 
   const onConnectStart: OnConnectStart = useCallback((_event, params) => {
     connectionSourceIdRef.current = params.nodeId ? (params.nodeId as NodeId) : null;
+    setConnectHoverTargetId(null);
   }, []);
 
   const onConnectEnd: OnConnectEnd = useCallback(
@@ -294,10 +486,18 @@ export function Canvas() {
       const sourceId =
         (connectionState.fromNode?.id as NodeId | undefined) ?? connectionSourceIdRef.current;
       connectionSourceIdRef.current = null;
+      setConnectHoverTargetId(null);
       if (!sourceId || connectionState.toNode) return;
       const point = getClientPoint(event);
       if (!point) return;
       const pos = flow.screenToFlowPosition(point);
+      const targetNode = findConnectTarget(useCanvas.getState().nodes, pos.x, pos.y, sourceId);
+      if (targetNode) {
+        suppressNextCanvasClickRef.current = true;
+        addEdge({ id: edgeId(), from: sourceId, to: targetNode.id });
+        setSelection([sourceId, targetNode.id]);
+        return;
+      }
       suppressNextCanvasClickRef.current = true;
       const sourceNode = useCanvas.getState().nodes.find((n) => n.id === sourceId);
       const height =
@@ -313,6 +513,66 @@ export function Canvas() {
     },
     [addEdge, addNode, flow, setSelection],
   );
+
+  useEffect(() => {
+    if (!flow) return undefined;
+    const onPointerMove = (event: PointerEvent) => {
+      const sourceId = connectionSourceIdRef.current;
+      if (!sourceId) return;
+      const pos = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const target = findConnectTarget(useCanvas.getState().nodes, pos.x, pos.y, sourceId);
+      setConnectHoverTargetId((current) => (current === target?.id ? current : (target?.id ?? null)));
+    };
+    const clearConnectionHover = () => setConnectHoverTargetId(null);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', clearConnectionHover);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', clearConnectionHover);
+    };
+  }, [flow]);
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const handle = (event.target as Element | null)?.closest?.('.react-flow__handle');
+      if (!(handle instanceof HTMLElement)) return;
+      const rect = handle.getBoundingClientRect();
+      const dx = event.clientX - (rect.left + rect.width / 2);
+      const dy = event.clientY - (rect.top + rect.height / 2);
+      const max = rect.width / 2 - 8;
+      const distance = Math.hypot(dx, dy);
+      const scale = distance > max && distance > 0 ? max / distance : 1;
+      handle.style.setProperty('--handle-x', `${dx * scale}px`);
+      handle.style.setProperty('--handle-y', `${dy * scale}px`);
+      handle.classList.add('canvas-handle-active');
+    };
+    const resetHandle = (event: PointerEvent) => {
+      const handle = event.currentTarget;
+      if (!(handle instanceof HTMLElement)) return;
+      handle.style.setProperty('--handle-x', '0px');
+      handle.style.setProperty('--handle-y', '0px');
+      handle.classList.remove('canvas-handle-active');
+    };
+    const bindHandle = (handle: Element) => {
+      handle.addEventListener('pointermove', onPointerMove as EventListener);
+      handle.addEventListener('pointerleave', resetHandle as EventListener);
+      handle.addEventListener('pointercancel', resetHandle as EventListener);
+    };
+    const unbindHandle = (handle: Element) => {
+      handle.removeEventListener('pointermove', onPointerMove as EventListener);
+      handle.removeEventListener('pointerleave', resetHandle as EventListener);
+      handle.removeEventListener('pointercancel', resetHandle as EventListener);
+    };
+
+    const bindAll = () => document.querySelectorAll('.react-flow__handle').forEach(bindHandle);
+    bindAll();
+    const observer = new MutationObserver(bindAll);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll('.react-flow__handle').forEach(unbindHandle);
+    };
+  }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     if (!hasImageItem(e.dataTransfer) && !hasHistoryImageDragData(e.dataTransfer)) return;
@@ -555,7 +815,7 @@ export function Canvas() {
         fitView
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={16} size={1} color="#e5e5e5" />
+        <Background gap={48} size={1} color="#d9d6cf" />
         <Controls position="bottom-right" />
         <MiniMap pannable zoomable position="top-right" />
       </ReactFlow>
@@ -630,7 +890,7 @@ function getClientPoint(event: MouseEvent | TouchEvent): { x: number; y: number 
   return { x: event.clientX, y: event.clientY };
 }
 
-function ContextMenu({ x, y, children }: { x: number; y: number; children: React.ReactNode }) {
+function ContextMenu({ x, y, children }: { x: number; y: number; children: ReactNode }) {
   return (
     <div
       className="fixed z-50 min-w-[190px] rounded-lg border border-zinc-200 bg-white p-1 shadow-xl shadow-zinc-300/40"

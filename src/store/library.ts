@@ -19,8 +19,8 @@ export interface Scene {
   createdAt: number;
 }
 
-const charStore = createStore('pincanvas-library', 'characters');
-const sceneStore = createStore('pincanvas-library', 'scenes');
+const charStore = createStore('tapnow-library', 'characters');
+const sceneStore = createStore('tapnow-library', 'scenes');
 
 interface LibraryState {
   characters: Character[];

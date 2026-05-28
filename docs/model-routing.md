@@ -14,7 +14,7 @@
 | 4 | image | 含 `gpt-image` ∪ `gpt-4o-image` | 任意 | `/v1/images/generations` | JSON | GPT 的图片端点把图片作为 message |
 | 5 | image | 含 `flux` | ≥ 1 张 | `/v1/images/generations` | JSON | flux-kontext 支持图生图，但走 generations 端点把 image 当字段 |
 | 6 | image | 含 `mj` ∪ `midjourney` | 任意 | provider 私有 | JSON | MJ 走自有协议 |
-| 7 | image | provider = `jimeng` 且 `pin_jimeng_use_local_file=true` | ≥ 1 张 | `/v1/images/edits` | FormData | 远端 URL 会被先 fetch 成 Blob 再上传 |
+| 7 | image | provider = `jimeng` 且 `tapnow_jimeng_use_local_file=true` | ≥ 1 张 | `/v1/images/edits` | FormData | 远端 URL 会被先 fetch 成 Blob 再上传 |
 | 8 | video | 含 `sora` | 任意 | `/v1/videos/generations` | JSON | prompt 中 `@name` → `@{name}` |
 | 9 | video | 其他视频模型 | 任意 | `/v1/videos/generations` | JSON | 默认走 OpenAI 兼容 |
 | 10 | chat | 任意 | — | `/v1/chat/completions` | JSON | |
@@ -131,7 +131,7 @@ test('chat → chat/completions')
 
 ### 4.2 Jimeng（即梦）
 - 默认走 OpenAI 兼容协议。
-- 若开关 `pin_jimeng_use_local_file=true` 且参考图是 http(s) URL：
+- 若开关 `tapnow_jimeng_use_local_file=true` 且参考图是 http(s) URL：
   - fetch 远端图 → 转 Blob → 用 FormData 上传（绕开远端鉴权问题）
 
 ### 4.3 Midjourney
@@ -148,8 +148,8 @@ test('chat → chat/completions')
 
 | localStorage 键 | 类型 | 影响 |
 |---|---|---|
-| `pin_jimeng_use_local_file` | `'true' \| 'false'` | 见 4.2 |
-| `pin_global_key` | string | 兜底 apiKey（节点未配 apiConfig 时用） |
-| `pin_api_configs` | JSON | 各 provider 的 url/key 覆盖 |
-| `pin_api_blacklist` | JSON | 临时禁用的 endpoint |
-| `pin_api_suspend` | JSON | 临时挂起（如冷却中） |
+| `tapnow_jimeng_use_local_file` | `'true' \| 'false'` | 见 4.2 |
+| `tapnow_global_key` | string | 兜底 apiKey（节点未配 apiConfig 时用） |
+| `tapnow_api_configs` | JSON | 各 provider 的 url/key 覆盖 |
+| `tapnow_api_blacklist` | JSON | 临时禁用的 endpoint |
+| `tapnow_api_suspend` | JSON | 临时挂起（如冷却中） |

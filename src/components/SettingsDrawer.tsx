@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getModelDisplayName } from '@/api/models';
-import { DEFAULT_IMAGE_MODEL } from '@/api/upstream';
+import { DEFAULT_IMAGE_MODEL, FIXED_BASE_URL } from '@/api/upstream';
 import { useModels } from '@/hooks/useModels';
 import { getPref, setPref } from '@/store/prefs';
 import { ModelManager } from './ModelManager';
@@ -53,6 +53,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
   };
 
   const saveSettings = () => {
+    setPref('global_base_url', FIXED_BASE_URL);
     setPref('global_key', draft.apiKey.trim());
     setPref('last_image_model', draft.lastImageModel);
     setPref('last_video_model', draft.lastVideoModel);
@@ -246,7 +247,7 @@ export function SettingsDrawer({ open, onClose }: Props) {
           </div>
           {saved && (
             <p className="px-1 text-[11px] text-green-600">
-              设置已保存到 localStorage（<code>pin_*</code>）。
+              设置已保存到 localStorage（<code>tapnow_*</code>）。
             </p>
           )}
         </div>

@@ -1,7 +1,7 @@
 import type { ModelDef } from '@/types/model';
 
 export const DEFAULT_MODELS: ModelDef[] = [
-  // OpenAI 兼容网关（Wan 系列等）
+  // xicily / new-api OpenAI-compatible
   {
     id: 'wan2.7-image',
     name: 'wan2.7-image',
@@ -198,9 +198,8 @@ export const DEFAULT_MODELS: ModelDef[] = [
 
 const BY_ID: Map<string, ModelDef> = new Map(DEFAULT_MODELS.map((m) => [m.id, m]));
 
-const USER_LIBRARY_KEY_NEW = 'pin_model_library';
-const USER_LIBRARY_KEY_LEGACY = ['ncs_model_library', 'tapnow_model_library'];
-const OVERRIDES_KEY = 'pin_model_overrides';
+const USER_LIBRARY_KEY = 'tapnow_model_library';
+const OVERRIDES_KEY = 'tapnow_model_overrides';
 
 /**
  * 查找模型：先在 DEFAULT_MODELS 找；找不到读 localStorage 用户库 fallback。
@@ -209,18 +208,8 @@ const OVERRIDES_KEY = 'pin_model_overrides';
 export function getModelDef(id: string): ModelDef | undefined {
   const def = BY_ID.get(id);
   if (def) return applyModelOverride(id, def);
-  if (typeof localStorage === 'undefined') return undefined;
   try {
-    let raw = localStorage.getItem(USER_LIBRARY_KEY_NEW);
-    if (!raw) {
-      for (const legacyKey of USER_LIBRARY_KEY_LEGACY) {
-        const legacy = localStorage.getItem(legacyKey);
-        if (legacy) {
-          raw = legacy;
-          break;
-        }
-      }
-    }
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(USER_LIBRARY_KEY) : null;
     if (!raw) return undefined;
     const userModels = JSON.parse(raw) as ModelDef[];
     return Array.isArray(userModels) ? userModels.find((m) => m.id === id) : undefined;
