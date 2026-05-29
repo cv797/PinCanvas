@@ -88,6 +88,7 @@ export interface GenImageNode extends NodeBase {
   kind: 'gen-image';
   settings: {
     prompt: string;
+    promptHtml?: string;
     model: string;
     ratio?: string;
     resolution?: string;

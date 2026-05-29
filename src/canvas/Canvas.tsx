@@ -444,13 +444,30 @@ function findDropTarget(nodes: AppNode[], x: number, y: number): AppNode | null 
 }
 
 function findConnectTarget(nodes: AppNode[], x: number, y: number, sourceId: NodeId): AppNode | null {
+  const source = nodes.find((node) => node.id === sourceId);
+  if (!source) return null;
   for (const node of [...nodes].reverse()) {
     if (node.id === sourceId) continue;
     if (x < node.x || y < node.y) continue;
     if (x > node.x + node.width || y > node.y + node.height) continue;
+    if (!canConnectNodes(source, node)) continue;
     return node;
   }
   return null;
+}
+
+function canConnectNodes(source: AppNode, target: AppNode): boolean {
+  if (source.id === target.id) return false;
+  if (target.kind !== 'gen-image') return true;
+  return isImageSourceNode(source);
+}
+
+function isImageSourceNode(node: AppNode): boolean {
+  if (node.kind === 'input-image') return !!node.settings.content;
+  if (node.kind === 'gen-image') return !!node.content;
+  if (node.kind === 'image-compare') return node.settings.images.length > 0;
+  if (node.kind === 'preview') return node.settings.previewType !== 'video' && !!(node.settings.content || node.content);
+  return false;
 }
 
 export function Canvas() {
@@ -522,6 +539,10 @@ export function Canvas() {
   const onConnect: OnConnect = useCallback(
     (c) => {
       if (!c.source || !c.target || c.source === c.target) return;
+      const state = useCanvas.getState();
+      const source = state.nodes.find((node) => node.id === c.source);
+      const target = state.nodes.find((node) => node.id === c.target);
+      if (!source || !target || !canConnectNodes(source, target)) return;
       addEdge({ id: edgeId(), from: c.source as NodeId, to: c.target as NodeId });
       setSelectedEdgeId(null);
       setConnectHoverTargetId(null);
