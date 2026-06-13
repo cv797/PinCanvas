@@ -34,6 +34,13 @@ const DEFAULTS: Record<NodeKind, { width: number; height: number }> = {
   'generate-character-video': { width: 360, height: 400 },
   'generate-scene-video': { width: 360, height: 400 },
   'character-card': { width: 420, height: 520 },
+  'direct-final-upload': { width: 300, height: 260 },
+  'direct-final-analysis': { width: 380, height: 520 },
+  'direct-final-gate': { width: 340, height: 420 },
+  'direct-final-main-prompt': { width: 390, height: 520 },
+  'direct-final-detail-prompt': { width: 390, height: 540 },
+  'direct-final-render': { width: 420, height: 420 },
+  'direct-final-review': { width: 380, height: 440 },
 };
 
 export function createNode(kind: NodeKind, pos: Pos): AppNode {
@@ -182,6 +189,60 @@ export function createNode(kind: NodeKind, pos: Pos): AppNode {
           addLabels: true,
           model: DEFAULT_IMAGE_MODEL,
         },
+      };
+    case 'direct-final-upload':
+      return { ...base, kind, settings: { content: '', roleName: null } };
+    case 'direct-final-analysis':
+      return {
+        ...base,
+        kind,
+        settings: {
+          model: DEFAULT_CHAT_MODEL,
+          copyLanguage: 'zh-CN',
+          action: 'brief',
+          gateCount: 5,
+        },
+      };
+    case 'direct-final-gate':
+      return {
+        ...base,
+        kind,
+        settings: {
+          mainPromptCount: 2,
+        },
+      };
+    case 'direct-final-main-prompt':
+      return {
+        ...base,
+        kind,
+        settings: { model: DEFAULT_CHAT_MODEL, copyLanguage: 'zh-CN', slot: 1 },
+      };
+    case 'direct-final-detail-prompt':
+      return {
+        ...base,
+        kind,
+        settings: { model: DEFAULT_CHAT_MODEL, copyLanguage: 'zh-CN', moduleCode: 'M1' },
+      };
+    case 'direct-final-render':
+      return {
+        ...base,
+        kind,
+        settings: {
+          model: DEFAULT_IMAGE_MODEL,
+          copyLanguage: 'zh-CN',
+          ratio: '1:1',
+          resolution: '1024x1024',
+          width: 1024,
+          height: 1024,
+          quality: 'auto',
+          count: 1,
+        },
+      };
+    case 'direct-final-review':
+      return {
+        ...base,
+        kind,
+        settings: { model: DEFAULT_CHAT_MODEL, copyLanguage: 'zh-CN' },
       };
   }
 }

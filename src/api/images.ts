@@ -3,6 +3,7 @@ import { request } from './client';
 import { routeRequest, type RouteCtx, type TaskInput } from './model-routing';
 import { pollTask } from './poll';
 import { resolveTemplate, type Vars } from './template';
+import { apiUrl } from './url';
 
 export interface ImageGenResult {
   created?: number;
@@ -31,7 +32,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<ImageGenRe
   const route = routeRequest(TASK, opts.model, opts.ctx);
   const resolved = resolveTemplate(route.bodyTemplate, opts.vars);
   const baseUrl = opts.baseUrl.replace(/\/+$/, '');
-  const url = baseUrl + route.endpoint;
+  const url = apiUrl(baseUrl, route.endpoint);
   const body: BodyInit =
     resolved.kind === 'json' ? JSON.stringify(resolved.body) : resolved.body;
 
@@ -47,7 +48,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<ImageGenRe
     });
     const taskId = init.task_id ?? init.id;
     if (!taskId) throw new Error('Async image response missing task_id');
-    const pollUrl = `${baseUrl}/v1/tasks/${taskId}`;
+    const pollUrl = apiUrl(baseUrl, `/v1/tasks/${taskId}`);
     return pollTask<ImageGenResult & AsyncInit>(pollUrl, {
       apiKey: opts.apiKey,
       signal: opts.signal,

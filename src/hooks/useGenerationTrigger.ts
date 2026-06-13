@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { chatComplete, type ChatContent } from '@/api/chat';
 import { generateImage } from '@/api/images';
+import { requestStructuredJson } from '@/api/structured';
 import {
   fetchImageMaterialBlob,
   importImageUrlMaterial,
@@ -43,6 +44,11 @@ import type {
   GenerateSceneVideoNode,
   GenImageNode,
   GenVideoNode,
+  DirectFinalAnalysisNode,
+  DirectFinalDetailPromptNode,
+  DirectFinalMainPromptNode,
+  DirectFinalRenderNode,
+  DirectFinalReviewNode,
   NodeId,
   NodeKind,
   VideoAnalyzeNode,
@@ -51,11 +57,35 @@ import type { ModelDef } from '@/types/model';
 import { splitImageBatch } from '@/utils/batch';
 import { blobToDataURL, urlToBlob } from '@/utils/image';
 import { edgeId } from '@/utils/id';
-import { createImageCompareNode, createVideoPreviewNode } from '@/canvas/factory';
+import { createImageCompareNode, createNode, createVideoPreviewNode } from '@/canvas/factory';
 import { getResultNodePosition } from '@/canvas/resultLayout';
 import { composeCharacterCard } from '@/utils/characterCard';
 import { resolveUpstream } from './useUpstream';
 import { resolveProviderConfig } from '@/utils/providerConfig';
+import { collectDirectFinalGraphContext } from '@/lib/direct-final/graph';
+import {
+  buildAssetInputText,
+  buildAssetInstructions,
+  buildCommercialBriefInputText,
+  buildCommercialBriefInstructions,
+  buildDirectFinalExecutionPrompt,
+  buildReviewInputText,
+  buildReviewInstructions,
+  buildSellingReasonInputText,
+  buildSellingReasonInstructions,
+} from '@/lib/direct-final/prompts';
+import {
+  COMMERCIAL_BRIEF_SCHEMA,
+  DIRECT_FINAL_ASSET_SCHEMA,
+  DIRECT_FINAL_REVIEW_SCHEMA,
+  SELLING_REASON_SCHEMA,
+  buildRiskSummary,
+  createAssetFromPayload,
+  createCommercialBriefFromPayload,
+  createReviewFromPayload,
+  createSellingReasonCardsFromPayload,
+} from '@/lib/direct-final/validation';
+import { evaluateDirectFinalAsset } from '@/lib/direct-final/review';
 
 export interface TriggerResult {
   taskId: string;
@@ -70,14 +100,19 @@ function imageResultToUrl(item: { url?: string; b64_json?: string }): string | u
 }
 
 async function persistImageUrl(url: string, name: string): Promise<string> {
-  if (isLocalImageUrl(url)) {
-    const blob = await loadImageBlob(url);
-    return uploadImageMaterial(blob, ensureImageFilename(name, blob.type));
-  }
-  if (isHttpUrl(url)) {
-    // 对于 HTTP URL，直接让后端导入
-    // 避免浏览器 CORS 问题
-    return importImageUrlMaterial(url, ensureImageFilename(name));
+  try {
+    if (isLocalImageUrl(url)) {
+      const blob = await loadImageBlob(url);
+      return uploadImageMaterial(blob, ensureImageFilename(name, blob.type));
+    }
+    if (isHttpUrl(url)) {
+      // 对于 HTTP URL，直接让后端导入
+      // 避免浏览器 CORS 问题
+      return importImageUrlMaterial(url, ensureImageFilename(name));
+    }
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) return url;
+    throw error;
   }
   throw new Error(`不支持的图片地址: ${url.slice(0, 48)}`);
 }
@@ -136,6 +171,11 @@ function isLocalImageUrl(url: string): boolean {
 
 function isHttpUrl(url: string): boolean {
   return url.startsWith('http://') || url.startsWith('https://');
+}
+
+function isStorageNotConfiguredError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('storage_not_configured');
 }
 
 function ensureImageFilename(name: string, contentType = 'image/png'): string {
@@ -408,6 +448,12 @@ function resolveImageQuality(value?: string): string {
   return 'standard';
 }
 
+function clampDirectFinalRenderCount(value: number | undefined): number {
+  const parsed = Math.round(Number(value ?? 1));
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(9, Math.max(1, parsed));
+}
+
 interface RunResult {
   kind: HistoryKind;
   model: string;
@@ -445,6 +491,9 @@ function loadRuntime(model?: ModelDef): { apiKey: string; baseUrl: string } {
 
   if (!apiKey) {
     throw new Error('API Key 未配置（请在设置中配置服务商或全局 API Key）');
+  }
+  if (!baseUrl) {
+    throw new Error('Base URL 未配置（请在设置中配置服务商 Base URL）');
   }
 
   return { apiKey, baseUrl };
@@ -498,6 +547,21 @@ function getPendingHistoryDraft(
       prompt: upstream.prompt || node.settings.prompt,
       sizeDesc: `${node.settings.ratio ?? '1:1'} · ${resolveImageSize(node.settings)} · ${node.settings.count ?? 1}张`,
       refsCount: upstream.referenceImages.length,
+    };
+  }
+
+  if (node.kind === 'direct-final-render') {
+    const context = collectDirectFinalGraphContext(node.id, nodes, edges);
+    const modelId = normalizeImageModelId(node.settings.model);
+    const count = clampDirectFinalRenderCount(node.settings.count);
+    return {
+      nodeId: node.id,
+      nodeKind: node.kind,
+      kind: 'image',
+      model: modelId,
+      prompt: context.asset?.goal || node.settings.prompt,
+      sizeDesc: `${node.settings.ratio ?? '1:1'} · ${resolveImageSize(node.settings)} · ${count}张`,
+      refsCount: context.sourceImages.length,
     };
   }
 
@@ -638,6 +702,321 @@ async function runImageGen(
     sizeDesc: `${node.settings.ratio ?? '1:1'} · ${resolveImageSize(node.settings)} · ${storedImages.length}张`,
     refsCount: refs.length,
   };
+}
+
+async function runDirectFinalAnalysis(
+  node: DirectFinalAnalysisNode,
+  nodes: AppNode[],
+  edges: AppEdge[],
+): Promise<void> {
+  const patchSettings = useCanvas.getState().patchSettings;
+  patchSettings<'direct-final-analysis'>(node.id, { isGenerating: true, error: null });
+  try {
+    const model = getModelDef(node.settings.model);
+    if (!model) throw new Error(`未知模型: ${node.settings.model}`);
+    const { apiKey, baseUrl } = loadRuntime(model);
+    const context = collectDirectFinalGraphContext(node.id, nodes, edges);
+    if (context.sourceImages.length === 0) throw new Error('请先连接成图源图。');
+
+    if (node.settings.action === 'gates') {
+      const brief = context.brief;
+      if (!brief?.confirmedAt) throw new Error('先确认商业分析，再生成门禁节点。');
+      if (brief.isStale) throw new Error('商业分析已过期，请重新确认后再生成门禁节点。');
+      const raw = await requestStructuredJson({
+        apiKey,
+        baseUrl,
+        model: model.name,
+        instructions: buildSellingReasonInstructions(),
+        inputText: buildSellingReasonInputText(brief, context.sourceImages),
+        schema: SELLING_REASON_SCHEMA,
+        schemaName: 'direct_final_selling_reasons',
+        maxOutputTokens: 2200,
+        imageDataUrls: context.sourceImages.map((image) => image.url),
+      });
+      const cards = createSellingReasonCardsFromPayload(raw, {
+        model: model.id,
+        limit: node.settings.gateCount ?? 5,
+      });
+      if (cards.length < 3) throw new Error('门禁节点数量不足 3 个。');
+      const state = useCanvas.getState();
+      const createdIds: NodeId[] = [];
+      cards.forEach((card, index) => {
+        const gate = createNode('direct-final-gate', {
+          x: node.x + 430 + index * 380,
+          y: node.y,
+        });
+        if (gate.kind !== 'direct-final-gate') return;
+        gate.settings.card = card;
+        state.addNode(gate);
+        state.addEdge({ id: edgeId(), from: node.id, to: gate.id });
+        createdIds.push(gate.id);
+      });
+      state.setSelection(createdIds);
+      patchSettings<'direct-final-analysis'>(node.id, { isGenerating: false, error: null });
+      return;
+    }
+
+    const raw = await requestStructuredJson({
+      apiKey,
+      baseUrl,
+      model: model.name,
+      instructions: buildCommercialBriefInstructions(),
+      inputText: buildCommercialBriefInputText(context.sourceImages),
+      schema: COMMERCIAL_BRIEF_SCHEMA,
+      schemaName: 'direct_final_commercial_brief',
+      maxOutputTokens: 1800,
+      imageDataUrls: context.sourceImages.map((image) => image.url),
+    });
+    const brief = createCommercialBriefFromPayload(raw, {
+      model: model.id,
+      sourceImages: context.sourceImages,
+      previous: node.settings.brief,
+    });
+    patchSettings<'direct-final-analysis'>(node.id, {
+      brief,
+      risk: buildRiskSummary(brief, context.sourceImages),
+      isGenerating: false,
+      error: null,
+    });
+  } catch (error) {
+    patchSettings<'direct-final-analysis'>(node.id, {
+      isGenerating: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+async function runDirectFinalPrompt(
+  node: DirectFinalMainPromptNode | DirectFinalDetailPromptNode,
+  nodes: AppNode[],
+  edges: AppEdge[],
+): Promise<void> {
+  const patchSettings = useCanvas.getState().patchSettings;
+  if (node.kind === 'direct-final-main-prompt') {
+    patchSettings<'direct-final-main-prompt'>(node.id, { isGenerating: true, error: null });
+  } else {
+    patchSettings<'direct-final-detail-prompt'>(node.id, { isGenerating: true, error: null });
+  }
+  try {
+    const model = getModelDef(node.settings.model);
+    if (!model) throw new Error(`未知模型: ${node.settings.model}`);
+    const { apiKey, baseUrl } = loadRuntime(model);
+    const context = collectDirectFinalGraphContext(node.id, nodes, edges);
+    const brief = context.brief;
+    if (!brief?.confirmedAt) throw new Error('先确认商业分析，再生成成图脚本。');
+    if (brief.isStale) throw new Error('商业分析已过期，请重新确认。');
+    if (context.sourceImages.length === 0) throw new Error('缺少源图。');
+    const cards = context.cards.filter((card) => Boolean(card.confirmedAt));
+    if (cards.length === 0) throw new Error('先确认门禁节点，再生成成图脚本。');
+    const risk = context.risk;
+    const raw = await requestStructuredJson({
+      apiKey,
+      baseUrl,
+      model: model.name,
+      instructions: buildAssetInstructions({
+        copyLanguage: node.settings.copyLanguage,
+        slot: node.kind === 'direct-final-main-prompt' ? node.settings.slot : undefined,
+        moduleCode: node.kind === 'direct-final-detail-prompt' ? node.settings.moduleCode : undefined,
+      }),
+      inputText: buildAssetInputText({
+        brief,
+        cards,
+        risk,
+        sourceImages: context.sourceImages,
+        copyLanguage: node.settings.copyLanguage,
+        slot: node.kind === 'direct-final-main-prompt' ? node.settings.slot : undefined,
+        moduleCode: node.kind === 'direct-final-detail-prompt' ? node.settings.moduleCode : undefined,
+      }),
+      schema: DIRECT_FINAL_ASSET_SCHEMA,
+      schemaName:
+        node.kind === 'direct-final-main-prompt'
+          ? 'direct_final_main_asset'
+          : 'direct_final_detail_asset',
+      maxOutputTokens: 2400,
+      imageDataUrls: context.sourceImages.map((image) => image.url),
+    });
+    const asset = createAssetFromPayload(raw, {
+      assetKind: node.kind === 'direct-final-main-prompt' ? 'main-image' : 'detail-module',
+      slot: node.kind === 'direct-final-main-prompt' ? node.settings.slot : undefined,
+      moduleCode: node.kind === 'direct-final-detail-prompt' ? node.settings.moduleCode : undefined,
+      model: model.id,
+      matchedCards: cards,
+    });
+    const assetWithSelfReview = {
+      ...asset,
+      selfReviewScore: evaluateDirectFinalAsset(brief, cards, asset).score,
+    };
+    if (node.kind === 'direct-final-main-prompt') {
+      patchSettings<'direct-final-main-prompt'>(node.id, {
+        asset: assetWithSelfReview,
+        isGenerating: false,
+        error: null,
+      });
+    } else {
+      patchSettings<'direct-final-detail-prompt'>(node.id, {
+        asset: assetWithSelfReview,
+        isGenerating: false,
+        error: null,
+      });
+    }
+  } catch (error) {
+    if (node.kind === 'direct-final-main-prompt') {
+      patchSettings<'direct-final-main-prompt'>(node.id, {
+        isGenerating: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } else {
+      patchSettings<'direct-final-detail-prompt'>(node.id, {
+        isGenerating: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+}
+
+async function runDirectFinalRender(
+  node: DirectFinalRenderNode,
+  nodes: AppNode[],
+  edges: AppEdge[],
+): Promise<RunResult> {
+  const patchSettings = useCanvas.getState().patchSettings;
+  patchSettings<'direct-final-render'>(node.id, { isGenerating: true, error: null });
+  try {
+    const modelId = normalizeImageModelId(node.settings.model);
+    const model = getModelDef(modelId);
+    if (!model) throw new Error(`未知模型: ${modelId}`);
+    const { apiKey, baseUrl } = loadRuntime(model);
+    const context = collectDirectFinalGraphContext(node.id, nodes, edges);
+    if (!context.brief) throw new Error('缺少商业分析。');
+    if (!context.brief.confirmedAt) throw new Error('先确认商业分析，再生成最终图。');
+    if (context.brief.isStale) throw new Error('商业分析已过期，请重新确认。');
+    if (!context.asset) throw new Error('缺少 direct-final 成图脚本。');
+    if (context.sourceImages.length === 0) throw new Error('缺少源图。');
+    const finalPrompt = buildDirectFinalExecutionPrompt({
+      brief: context.brief,
+      asset: context.asset,
+      copyLanguage: node.settings.copyLanguage,
+      aspectRatio: node.settings.ratio ?? '1:1',
+    });
+    const refs = context.sourceImages.map((image) => image.url);
+
+    if (model.provider === 'midjourney') {
+      throw new Error('成图执行需要支持源图参考的图片模型，当前 Midjourney 路由不会传入源图。请切换为支持图片编辑/图生图的模型。');
+    }
+
+    const ctx = {
+      hasReferenceImages: refs.length > 0,
+      hasMask: false,
+      useJimengLocalFile: Boolean(getPref('jimeng_use_local_file', false)),
+    };
+    const needsFileInput = routeRequest({ type: 'image' }, model, ctx).bodyKind === 'form';
+    const { imageUrls, blobs } = await prepareReferenceInputs(refs, { includeBlobs: needsFileInput });
+    const baseVars: Vars = {
+      modelName: model.name,
+      prompt: finalPrompt,
+      size: resolveImageSize(node.settings),
+      ratio: node.settings.ratio ?? '1:1',
+      quality: resolveImageQuality(node.settings.quality),
+      enableSequential: false,
+      imageUrls,
+    };
+    if (blobs) baseVars.image = blobs;
+
+    const count = clampDirectFinalRenderCount(node.settings.count);
+    const images: string[] = [];
+    for (const n of splitImageBatch(count)) {
+      const result = await generateImage({
+        model,
+        baseUrl,
+        apiKey,
+        vars: { ...baseVars, n },
+        ctx,
+      });
+      images.push(...result.data.map(imageResultToUrl).filter((url): url is string => !!url));
+    }
+    const content = images[0];
+    if (!content) throw new Error('生成结果无 url / b64_json');
+    const storedImages = await persistImageUrls(images, 'direct-final-image');
+    const storedContent = storedImages[0];
+    if (!storedContent) throw new Error('生成结果持久化失败');
+    useCanvas.getState().patchNode(node.id, {
+      content: storedContent,
+      generatedImages: storedImages,
+      mjImages: undefined,
+    });
+    patchSettings<'direct-final-render'>(node.id, {
+      prompt: finalPrompt,
+      isGenerating: false,
+      error: null,
+    });
+    return {
+      kind: 'image',
+      model: model.id,
+      prompt: finalPrompt,
+      contentUrl: storedContent,
+      contentUrls: storedImages,
+      sizeDesc: `${node.settings.ratio ?? '1:1'} · ${resolveImageSize(node.settings)} · ${storedImages.length}张`,
+      refsCount: refs.length,
+    };
+  } catch (error) {
+    patchSettings<'direct-final-render'>(node.id, {
+      isGenerating: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+async function runDirectFinalReview(
+  node: DirectFinalReviewNode,
+  nodes: AppNode[],
+  edges: AppEdge[],
+): Promise<void> {
+  const patchSettings = useCanvas.getState().patchSettings;
+  patchSettings<'direct-final-review'>(node.id, { isGenerating: true, error: null });
+  try {
+    const model = getModelDef(node.settings.model);
+    if (!model) throw new Error(`未知模型: ${node.settings.model}`);
+    const { apiKey, baseUrl } = loadRuntime(model);
+    const context = collectDirectFinalGraphContext(node.id, nodes, edges);
+    const renderNode = context.renderNode;
+    if (!context.brief) throw new Error('缺少商业分析。');
+    if (!context.promptNode || !context.asset) throw new Error('缺少成图脚本。');
+    if (!renderNode?.content) throw new Error('缺少成图结果。');
+    if (context.sourceImages.length === 0) throw new Error('缺少源图。');
+    const raw = await requestStructuredJson({
+      apiKey,
+      baseUrl,
+      model: model.name,
+      instructions: buildReviewInstructions(node.settings.copyLanguage),
+      inputText: buildReviewInputText({
+        brief: context.brief,
+        asset: context.asset,
+        sourceImages: context.sourceImages,
+        copyLanguage: node.settings.copyLanguage,
+        risk: context.risk,
+      }),
+      schema: DIRECT_FINAL_REVIEW_SCHEMA,
+      schemaName: 'direct_final_review',
+      maxOutputTokens: 1600,
+      imageDataUrls: [...context.sourceImages.map((image) => image.url), renderNode.content],
+    });
+    const review = createReviewFromPayload(raw, {
+      outputNodeId: renderNode.id,
+      promptNodeId: context.promptNode.id,
+      assetId: context.asset.assetId,
+      copyLanguage: node.settings.copyLanguage,
+    });
+    patchSettings<'direct-final-review'>(node.id, { review, isGenerating: false, error: null });
+  } catch (error) {
+    patchSettings<'direct-final-review'>(node.id, {
+      isGenerating: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 async function runVideoGen(
@@ -1461,6 +1840,17 @@ export function useGenerationTrigger() {
         try {
           if (node.kind === 'gen-image') {
             result = await runImageGen(node, state.nodes, state.edges);
+          } else if (node.kind === 'direct-final-analysis') {
+            await runDirectFinalAnalysis(node, state.nodes, state.edges);
+          } else if (
+            node.kind === 'direct-final-main-prompt' ||
+            node.kind === 'direct-final-detail-prompt'
+          ) {
+            await runDirectFinalPrompt(node, state.nodes, state.edges);
+          } else if (node.kind === 'direct-final-render') {
+            result = await runDirectFinalRender(node, state.nodes, state.edges);
+          } else if (node.kind === 'direct-final-review') {
+            await runDirectFinalReview(node, state.nodes, state.edges);
           } else if (node.kind === 'gen-video') {
             result = await runVideoGen(
               node,
@@ -1630,6 +2020,7 @@ function createVideoPreviewResultNode(source: AppNode, result: RunResult): void 
 function isPersistableKind(kind: string): boolean {
   return (
     kind === 'gen-image' ||
+    kind === 'direct-final-render' ||
     kind === 'gen-video' ||
     kind === 'generate-character-image' ||
     kind === 'generate-scene-image' ||

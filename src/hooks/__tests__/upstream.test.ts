@@ -42,6 +42,31 @@ function genImage(idStr: string, content: string | null = null): AppNode {
   };
 }
 
+function directFinalUpload(idStr: string, content: string): AppNode {
+  return {
+    id: id(idStr),
+    kind: 'direct-final-upload',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    settings: { content, filename: '包装.png' },
+  };
+}
+
+function directFinalRender(idStr: string, content: string | null = null): AppNode {
+  return {
+    id: id(idStr),
+    kind: 'direct-final-render',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    content,
+    settings: { model: 'nano-banana', copyLanguage: 'zh-CN' },
+  };
+}
+
 function audioInput(idStr: string, content: string): AppNode {
   return {
     id: id(idStr),
@@ -83,6 +108,20 @@ describe('resolveUpstream', () => {
     const nodes = [genImage('a', 'data:result'), genImage('b')];
     const edges = [edge('a', 'b')];
     expect(resolveUpstream(id('b'), nodes, edges).referenceImages).toEqual(['data:result']);
+  });
+
+  it('direct-final-upload → referenceImages', () => {
+    const nodes = [directFinalUpload('u', 'data:source'), directFinalRender('r')];
+    expect(resolveUpstream(id('r'), nodes, [edge('u', 'r')]).referenceImages).toEqual([
+      'data:source',
+    ]);
+  });
+
+  it('direct-final-render.content → 作为下游 referenceImages', () => {
+    const nodes = [directFinalRender('a', 'data:direct-result'), genImage('b')];
+    expect(resolveUpstream(id('b'), nodes, [edge('a', 'b')]).referenceImages).toEqual([
+      'data:direct-result',
+    ]);
   });
 
   it('5 张参考图上限：超出截断', () => {

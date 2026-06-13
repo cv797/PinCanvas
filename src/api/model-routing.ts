@@ -34,13 +34,21 @@ export function routeRequest(task: TaskInput, model: ModelDef, ctx: RouteCtx): R
 
   if (model.parameters && model.parameters.length > 0) {
     const paramValues = getAllParameterValues(model.id, model.parameters);
-    baseResult.bodyTemplate = {
-      ...baseResult.bodyTemplate,
-      ...paramValues,
-    };
+    baseResult.bodyTemplate = mergeModelParameters(baseResult.bodyTemplate, paramValues);
   }
 
   return baseResult;
+}
+
+function mergeModelParameters(
+  bodyTemplate: Record<string, unknown>,
+  paramValues: Record<string, string | number | boolean>,
+): Record<string, unknown> {
+  const merged = { ...bodyTemplate };
+  for (const [key, value] of Object.entries(paramValues)) {
+    if (!(key in merged)) merged[key] = value;
+  }
+  return merged;
 }
 
 function routeChat(model: ModelDef): RouteResult {
@@ -69,7 +77,10 @@ function routeVideo(model: ModelDef): RouteResult {
 }
 
 function routeImage(model: ModelDef, ctx: RouteCtx): RouteResult {
-  const name = model.name.toLowerCase();
+  const name = [model.id, model.name, model.displayName, model.group]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
   const hasRef = ctx.hasReferenceImages;
 
   // 6: Midjourney
@@ -141,8 +152,18 @@ function routeImage(model: ModelDef, ctx: RouteCtx): RouteResult {
     };
   }
 
-  // 4: GPT image（图作为 message，走 generations 但带 image 字段）
+  // 4: GPT image。带参考图时走 edits，避免源图只作为普通 JSON 字段被网关忽略。
   if (name.includes('gpt-image') || name.includes('gpt-4o-image')) {
+    if (hasRef) {
+      return {
+        endpoint: '/v1/images/edits',
+        method: 'POST',
+        bodyKind: 'form',
+        async: false,
+        provider: model.provider,
+        bodyTemplate: editsTemplate(ctx),
+      };
+    }
     return {
       endpoint: '/v1/images/generations',
       method: 'POST',
@@ -162,6 +183,17 @@ function routeImage(model: ModelDef, ctx: RouteCtx): RouteResult {
       async: false,
       provider: model.provider,
       bodyTemplate: fluxTemplate(hasRef),
+    };
+  }
+
+  if (hasRef) {
+    return {
+      endpoint: '/v1/images/edits',
+      method: 'POST',
+      bodyKind: 'form',
+      async: false,
+      provider: model.provider,
+      bodyTemplate: editsTemplate(ctx),
     };
   }
 

@@ -15,7 +15,5 @@ export const DEFAULT_IMAGE_MODELS: readonly string[] = [
 ];
 
 export function normalizeImageModelId(modelId: string | undefined): string {
-  return modelId && DEFAULT_IMAGE_MODELS.includes(modelId)
-    ? modelId
-    : DEFAULT_IMAGE_MODEL;
+  return modelId || DEFAULT_IMAGE_MODEL;
 }

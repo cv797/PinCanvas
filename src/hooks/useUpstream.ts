@@ -55,6 +55,9 @@ export function resolveUpstream(
         if (up.settings.content) refs.push(up.settings.content);
         if (up.settings.maskContent) mask = up.settings.maskContent;
         break;
+      case 'direct-final-upload':
+        if (up.settings.content) refs.push(up.settings.content);
+        break;
       case 'preview':
         if (up.settings.content) refs.push(up.settings.content);
         else if (up.content) refs.push(up.content);
@@ -63,6 +66,9 @@ export function resolveUpstream(
         refs.push(...up.settings.images);
         break;
       case 'gen-image':
+        if (up.content) refs.push(up.content);
+        break;
+      case 'direct-final-render':
         if (up.content) refs.push(up.content);
         break;
       case 'gen-video':

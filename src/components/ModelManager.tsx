@@ -20,8 +20,7 @@ export function ModelManager() {
   const videoModels = useModels('video');
   const chatModels = useModels('chat');
 
-  const { userModels, upsert, remove, exportModels, importModels, setOverride } =
-    useModelLibrary();
+  const { upsert, remove, exportModels, importModels, setOverride } = useModelLibrary();
 
   const allModels =
     activeTab === 'image' ? imageModels : activeTab === 'video' ? videoModels : chatModels;
@@ -54,7 +53,15 @@ export function ModelManager() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('确定要删除这个模型吗？')) {
+    const isDefaultModel = DEFAULT_MODELS.some((item) => item.id === id);
+    const message = isDefaultModel
+      ? '确定要从模型列表中隐藏这个内置模型吗？现有画布节点仍可继续识别该模型。'
+      : '确定要删除这个模型吗？';
+    if (confirm(message)) {
+      if (isDefaultModel) {
+        setOverride(id, { hidden: true });
+        return;
+      }
       remove(id);
     }
   };
@@ -145,7 +152,6 @@ export function ModelManager() {
           <ModelCard
             key={model.id}
             model={model}
-            canDelete={userModels.some((item) => item.id === model.id)}
             onEdit={() => handleEdit(model)}
             onDelete={() => handleDelete(model.id)}
           />
@@ -220,12 +226,10 @@ function IconButton({
 
 function ModelCard({
   model,
-  canDelete,
   onEdit,
   onDelete,
 }: {
   model: ModelDef;
-  canDelete: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -255,22 +259,20 @@ function ModelCard({
       <div className="flex gap-1">
         <button
           type="button"
+          className="rounded p-1 text-red-500 hover:bg-red-50"
+          onClick={onDelete}
+          title="删除"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
           className="rounded p-1 text-zinc-500 hover:bg-zinc-100"
           onClick={onEdit}
           title="编辑"
         >
           <Edit2 className="h-3.5 w-3.5" />
         </button>
-        {canDelete && (
-          <button
-            type="button"
-            className="rounded p-1 text-red-500 hover:bg-red-50"
-            onClick={onDelete}
-            title="删除"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
       </div>
     </div>
   );

@@ -1,3 +1,14 @@
+import type {
+  CommercialBrief,
+  DirectFinalAsset,
+  DirectFinalCopyLanguage,
+  DirectFinalDetailModuleCode,
+  DirectFinalMainImageSlot,
+  DirectFinalReview,
+  DirectFinalRiskSummary,
+  SellingReasonCard,
+} from './direct-final';
+
 export type NodeKind =
   | 'input-image'
   | 'audio-input'
@@ -20,7 +31,14 @@ export type NodeKind =
   | 'chat'
   | 'generate-character-video'
   | 'generate-scene-video'
-  | 'character-card';
+  | 'character-card'
+  | 'direct-final-upload'
+  | 'direct-final-analysis'
+  | 'direct-final-gate'
+  | 'direct-final-main-prompt'
+  | 'direct-final-detail-prompt'
+  | 'direct-final-render'
+  | 'direct-final-review';
 
 export type NodeId = string & { readonly __brand: 'NodeId' };
 export type VideoGenerationMode = 'first-last-frame' | 'omni-reference';
@@ -52,6 +70,17 @@ export interface InputImageNode extends NodeBase {
     height?: number;
     /** Inpainting 蒙版（白色 = 要编辑的区域；dataURL PNG） */
     maskContent?: string | null;
+  };
+}
+
+export interface DirectFinalUploadNode extends NodeBase {
+  kind: 'direct-final-upload';
+  settings: {
+    content: string;
+    filename?: string;
+    width?: number;
+    height?: number;
+    roleName?: string | null;
   };
 }
 
@@ -350,8 +379,86 @@ export interface ChatNode extends NodeBase {
   };
 }
 
+export interface DirectFinalAnalysisNode extends NodeBase {
+  kind: 'direct-final-analysis';
+  settings: {
+    model: string;
+    copyLanguage: DirectFinalCopyLanguage;
+    brief?: CommercialBrief;
+    risk?: DirectFinalRiskSummary;
+    action?: 'brief' | 'gates';
+    gateCount?: number;
+    isGenerating?: boolean;
+    error?: string | null;
+  };
+}
+
+export interface DirectFinalGateNode extends NodeBase {
+  kind: 'direct-final-gate';
+  settings: {
+    card?: SellingReasonCard;
+    mainPromptCount?: number;
+    detailModules?: DirectFinalDetailModuleCode[];
+    isGenerating?: boolean;
+    error?: string | null;
+  };
+}
+
+export interface DirectFinalMainPromptNode extends NodeBase {
+  kind: 'direct-final-main-prompt';
+  settings: {
+    model: string;
+    copyLanguage: DirectFinalCopyLanguage;
+    slot: DirectFinalMainImageSlot;
+    asset?: DirectFinalAsset;
+    isGenerating?: boolean;
+    error?: string | null;
+  };
+}
+
+export interface DirectFinalDetailPromptNode extends NodeBase {
+  kind: 'direct-final-detail-prompt';
+  settings: {
+    model: string;
+    copyLanguage: DirectFinalCopyLanguage;
+    moduleCode: DirectFinalDetailModuleCode;
+    asset?: DirectFinalAsset;
+    isGenerating?: boolean;
+    error?: string | null;
+  };
+}
+
+export interface DirectFinalRenderNode extends NodeBase {
+  kind: 'direct-final-render';
+  settings: {
+    model: string;
+    copyLanguage: DirectFinalCopyLanguage;
+    ratio?: string;
+    resolution?: string;
+    width?: number | '';
+    height?: number | '';
+    quality?: string;
+    count?: number;
+    prompt?: string;
+    isGenerating?: boolean;
+    error?: string | null;
+  };
+}
+
+export interface DirectFinalReviewNode extends NodeBase {
+  kind: 'direct-final-review';
+  settings: {
+    model: string;
+    copyLanguage: DirectFinalCopyLanguage;
+    review?: DirectFinalReview;
+    isGenerating?: boolean;
+    error?: string | null;
+  };
+}
+
 export type AppNode =
   | InputImageNode
+  | DirectFinalUploadNode
   | AudioInputNode
   | PreviewNode
   | ImageCompareNode
@@ -372,6 +479,12 @@ export type AppNode =
   | ChatNode
   | GenerateCharacterVideoNode
   | GenerateSceneVideoNode
-  | CharacterCardNode;
+  | CharacterCardNode
+  | DirectFinalAnalysisNode
+  | DirectFinalGateNode
+  | DirectFinalMainPromptNode
+  | DirectFinalDetailPromptNode
+  | DirectFinalRenderNode
+  | DirectFinalReviewNode;
 
 export type SettingsOf<K extends NodeKind> = Extract<AppNode, { kind: K }>['settings'];

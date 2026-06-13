@@ -39,4 +39,17 @@ describe('canvas store', () => {
 
     expect(useCanvas.getState().edges).toHaveLength(2);
   });
+
+  it('removes connected edges when deleting a node', () => {
+    const state = useCanvas.getState();
+    state.addNode(node('a'));
+    state.addNode(node('b'));
+    state.addNode(node('c'));
+    state.addEdge({ id: 'edge-1', from: id('a'), to: id('b') });
+    state.addEdge({ id: 'edge-2', from: id('b'), to: id('c') });
+
+    state.removeNode(id('b'));
+
+    expect(useCanvas.getState().edges).toEqual([]);
+  });
 });

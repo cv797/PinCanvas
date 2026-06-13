@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  ClipboardList,
   Eye,
   Film,
   ImageIcon,
@@ -10,6 +11,7 @@ import {
   MonitorPlay,
   Mountain,
   Music,
+  ShoppingBag,
   Type,
   User,
   UserPlus,
@@ -24,10 +26,12 @@ import {
   isNodeFeatureEnabled,
 } from '@/config/features';
 import { useCanvas } from '@/store/canvas';
-import type { NodeKind } from '@/types/node';
+import type { NodeId, NodeKind } from '@/types/node';
+import { edgeId } from '@/utils/id';
 
 interface MenuItem {
-  kind: NodeKind;
+  kind?: NodeKind;
+  template?: 'direct-final';
   label: string;
   Icon: typeof ImageIcon;
 }
@@ -38,6 +42,19 @@ interface MenuGroup {
 }
 
 const GROUPS: MenuGroup[] = [
+  {
+    title: '电商成图',
+    items: [
+      { template: 'direct-final', label: '成图直出模板', Icon: ShoppingBag },
+      { kind: 'direct-final-upload', label: '成图源图', Icon: ImageIcon },
+      { kind: 'direct-final-analysis', label: '商业分析', Icon: ClipboardList },
+      { kind: 'direct-final-gate', label: '门禁', Icon: BookOpen },
+      { kind: 'direct-final-main-prompt', label: '主图脚本', Icon: ImagePlus },
+      { kind: 'direct-final-detail-prompt', label: '详情脚本', Icon: Layers },
+      { kind: 'direct-final-render', label: '成图执行', Icon: ImagePlus },
+      { kind: 'direct-final-review', label: '成图复盘', Icon: Eye },
+    ],
+  },
   {
     title: '输入',
     items: [
@@ -96,6 +113,8 @@ let createCount = 0;
 
 export function AddNodeMenu({ onClose }: Props) {
   const addNode = useCanvas((s) => s.addNode);
+  const addEdge = useCanvas((s) => s.addEdge);
+  const setSelection = useCanvas((s) => s.setSelection);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -105,7 +124,30 @@ export function AddNodeMenu({ onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const onPick = (kind: NodeKind) => {
+  const createDirectFinalTemplate = () => {
+    if (!isNodeFeatureEnabled('direct-final-upload') || !isNodeFeatureEnabled('direct-final-analysis')) {
+      window.alert(FEATURE_DISABLED_MESSAGE);
+      return;
+    }
+    createCount += 1;
+    const x = 140 + (createCount % 5) * 48;
+    const y = 80 + (createCount % 5) * 32;
+    const upload = createNode('direct-final-upload', { x, y });
+    const analysis = createNode('direct-final-analysis', { x: x + 380, y });
+    addNode(upload);
+    addNode(analysis);
+    addEdge({ id: edgeId(), from: upload.id, to: analysis.id });
+    setSelection([upload.id, analysis.id] as NodeId[]);
+    onClose();
+  };
+
+  const onPick = (item: MenuItem) => {
+    if (item.template === 'direct-final') {
+      createDirectFinalTemplate();
+      return;
+    }
+    const kind = item.kind;
+    if (!kind) return;
     if (!isNodeFeatureEnabled(kind)) {
       window.alert(FEATURE_DISABLED_MESSAGE);
       return;
@@ -140,14 +182,20 @@ export function AddNodeMenu({ onClose }: Props) {
                 {group.title}
               </h3>
               <ul className="grid grid-cols-2 gap-2">
-                {group.items.map(({ kind, label, Icon }) => {
-                  const disabled = !isNodeFeatureEnabled(kind);
+                {group.items.map((item) => {
+                  const { kind, template, label, Icon } = item;
+                  const disabled = template === 'direct-final'
+                    ? !isNodeFeatureEnabled('direct-final-upload') ||
+                      !isNodeFeatureEnabled('direct-final-analysis')
+                    : kind
+                      ? !isNodeFeatureEnabled(kind)
+                      : false;
                   return (
-                  <li key={kind}>
+                  <li key={kind ?? template}>
                     <button
                       type="button"
                       className="flex h-20 w-full flex-col items-start justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-left text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 active:bg-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400"
-                      onClick={() => onPick(kind)}
+                      onClick={() => onPick(item)}
                       disabled={disabled}
                       title={disabled ? FEATURE_DISABLED_MESSAGE : label}
                     >

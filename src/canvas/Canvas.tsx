@@ -62,6 +62,15 @@ import { CharacterCardNodeComp } from './nodes/CharacterCardNode';
 import { ScriptToStoryboardNodeComp } from './nodes/ScriptToStoryboardNode';
 import { ChatNodeComp } from './nodes/ChatNode';
 import { StoryboardViewerNodeComp } from './nodes/StoryboardViewerNode';
+import {
+  DirectFinalAnalysisNodeComp,
+  DirectFinalDetailPromptNodeComp,
+  DirectFinalGateNodeComp,
+  DirectFinalMainPromptNodeComp,
+  DirectFinalRenderNodeComp,
+  DirectFinalReviewNodeComp,
+  DirectFinalUploadNodeComp,
+} from './nodes/DirectFinalNodes';
 
 function withNodeChrome(Component: ComponentType<any>) {
   return function NodeChrome(props: any) {
@@ -290,7 +299,12 @@ function canTriggerNode(kind: NodeKind): boolean {
     kind === 'generate-character-video' ||
     kind === 'generate-scene-video' ||
     kind === 'extract-characters-scenes' ||
-    kind === 'character-card'
+    kind === 'character-card' ||
+    kind === 'direct-final-analysis' ||
+    kind === 'direct-final-main-prompt' ||
+    kind === 'direct-final-detail-prompt' ||
+    kind === 'direct-final-render' ||
+    kind === 'direct-final-review'
   );
 }
 
@@ -311,7 +325,13 @@ function nodeHasTargetHandle(kind: NodeKind): boolean {
     kind === 'script-to-storyboard' ||
     kind === 'storyboard-viewer' ||
     kind === 'chat' ||
-    kind === 'character-card'
+    kind === 'character-card' ||
+    kind === 'direct-final-analysis' ||
+    kind === 'direct-final-gate' ||
+    kind === 'direct-final-main-prompt' ||
+    kind === 'direct-final-detail-prompt' ||
+    kind === 'direct-final-render' ||
+    kind === 'direct-final-review'
   );
 }
 
@@ -336,7 +356,14 @@ function nodeHasSourceHandle(kind: NodeKind): boolean {
     kind === 'script-to-storyboard' ||
     kind === 'storyboard-viewer' ||
     kind === 'chat' ||
-    kind === 'character-card'
+    kind === 'character-card' ||
+    kind === 'direct-final-upload' ||
+    kind === 'direct-final-analysis' ||
+    kind === 'direct-final-gate' ||
+    kind === 'direct-final-main-prompt' ||
+    kind === 'direct-final-detail-prompt' ||
+    kind === 'direct-final-render' ||
+    kind === 'direct-final-review'
   );
 }
 
@@ -369,6 +396,13 @@ const nodeTypes: NodeTypes = {
   'generate-character-video': withNodeChrome(GenerateCharacterVideoNodeComp),
   'generate-scene-video': withNodeChrome(GenerateSceneVideoNodeComp),
   'character-card': withNodeChrome(CharacterCardNodeComp),
+  'direct-final-upload': withNodeChrome(DirectFinalUploadNodeComp),
+  'direct-final-analysis': withNodeChrome(DirectFinalAnalysisNodeComp),
+  'direct-final-gate': withNodeChrome(DirectFinalGateNodeComp),
+  'direct-final-main-prompt': withNodeChrome(DirectFinalMainPromptNodeComp),
+  'direct-final-detail-prompt': withNodeChrome(DirectFinalDetailPromptNodeComp),
+  'direct-final-render': withNodeChrome(DirectFinalRenderNodeComp),
+  'direct-final-review': withNodeChrome(DirectFinalReviewNodeComp),
 };
 
 const QUICK_ADD: Array<{ kind: NodeKind; label: string; hint: string }> = [
@@ -385,9 +419,16 @@ const QUICK_ADD: Array<{ kind: NodeKind; label: string; hint: string }> = [
   { kind: 'extract-characters-scenes', label: '抽取角色 / 场景', hint: '从文本生成资产' },
   { kind: 'preview', label: '预览', hint: '查看图像或视频' },
   { kind: 'image-compare', label: '图片对比', hint: '并排查看多张生成结果' },
+  { kind: 'direct-final-upload', label: '成图源图', hint: '电商成图直出源图' },
+  { kind: 'direct-final-analysis', label: '商业分析', hint: '生成商业输入草稿' },
+  { kind: 'direct-final-gate', label: '门禁', hint: '必卖理由卡' },
+  { kind: 'direct-final-main-prompt', label: '主图脚本', hint: '生成主图成图脚本' },
+  { kind: 'direct-final-detail-prompt', label: '详情脚本', hint: '生成详情模块脚本' },
+  { kind: 'direct-final-render', label: '成图执行', hint: '结构化脚本生成图片' },
+  { kind: 'direct-final-review', label: '成图复盘', hint: '复盘输出图片' },
 ];
 
-const REFERENCE_DROP_TARGETS: ReadonlySet<NodeKind> = new Set(['gen-image']);
+const REFERENCE_DROP_TARGETS: ReadonlySet<NodeKind> = new Set(['gen-image', 'direct-final-render']);
 const PENDING_NODE_PICKER_HEIGHT = 180;
 const REFERENCE_PICKER_HEIGHT = 300;
 
@@ -458,16 +499,25 @@ function findConnectTarget(nodes: AppNode[], x: number, y: number, sourceId: Nod
 
 function canConnectNodes(source: AppNode, target: AppNode): boolean {
   if (source.id === target.id) return false;
-  if (target.kind !== 'gen-image') return true;
-  return isImageSourceNode(source);
+  if (target.kind === 'gen-image') return isImageSourceNode(source);
+  if (target.kind === 'direct-final-render') {
+    return isImageSourceNode(source) || isDirectFinalPromptNode(source);
+  }
+  return true;
 }
 
 function isImageSourceNode(node: AppNode): boolean {
   if (node.kind === 'input-image') return !!node.settings.content;
+  if (node.kind === 'direct-final-upload') return !!node.settings.content;
   if (node.kind === 'gen-image') return !!node.content;
+  if (node.kind === 'direct-final-render') return !!node.content;
   if (node.kind === 'image-compare') return node.settings.images.length > 0;
   if (node.kind === 'preview') return node.settings.previewType !== 'video' && !!(node.settings.content || node.content);
   return false;
+}
+
+function isDirectFinalPromptNode(node: AppNode): boolean {
+  return node.kind === 'direct-final-main-prompt' || node.kind === 'direct-final-detail-prompt';
 }
 
 export function Canvas() {

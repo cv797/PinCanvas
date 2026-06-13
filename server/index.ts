@@ -1,6 +1,7 @@
 import { createHmac, createHash, randomUUID } from 'node:crypto';
 import { loadStorageConfig, getPublicStorageStatus, type StorageConfig } from './config';
 import { handleVideoTaskRequest, initVideoTasks } from './video-tasks';
+import { handleStructuredRequest } from './structured';
 
 const PORT = Number(Bun.env.PORT || 80);
 const DIST_DIR = new URL('../dist/', import.meta.url);
@@ -40,6 +41,10 @@ const serverOptions = {
 
     if (url.pathname === '/api/storage/status') {
       return json(getPublicStorageStatus());
+    }
+
+    if (url.pathname === '/api/structured' && request.method === 'POST') {
+      return handleStructuredRequest(request, corsHeaders());
     }
 
     if (url.pathname === '/api/video/tasks' || url.pathname.startsWith('/api/video/tasks/')) {

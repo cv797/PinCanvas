@@ -1,5 +1,6 @@
 import type { ModelDef } from '@/types/model';
 import { request } from './client';
+import { apiUrl } from './url';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
@@ -36,7 +37,7 @@ export interface ChatOpts {
 export async function chatComplete(opts: ChatOpts): Promise<ChatCompletionResult> {
   const baseUrl = opts.baseUrl.replace(/\/+$/, '');
   return request<ChatCompletionResult>({
-    url: baseUrl + '/v1/chat/completions',
+    url: apiUrl(baseUrl, '/v1/chat/completions'),
     method: 'POST',
     apiKey: opts.apiKey,
     body: JSON.stringify({

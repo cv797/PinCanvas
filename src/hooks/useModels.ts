@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { DEFAULT_MODELS } from '@/api/models';
-import { DEFAULT_IMAGE_MODELS } from '@/api/upstream';
 import { useModelLibrary } from '@/store/models';
 import type { Modality, ModelDef } from '@/types/model';
 
@@ -20,9 +19,6 @@ export function useModels(modality?: Modality): ModelDef[] {
     const all = [...defaultModels, ...userModels];
     const visible = all.filter((m) => !m.hidden);
     const filtered = modality ? visible.filter((m) => m.modality === modality) : visible;
-    if (modality === 'image') {
-      return filtered.filter((m) => DEFAULT_IMAGE_MODELS.includes(m.id));
-    }
     if (modality === 'video') {
       return [...filtered].sort((a, b) => videoModelPriority(a) - videoModelPriority(b));
     }

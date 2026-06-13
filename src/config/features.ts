@@ -15,6 +15,13 @@ const ENABLED_NODE_KINDS = new Set<NodeKind>([
   'script-to-storyboard',
   'storyboard-viewer',
   'chat',
+  'direct-final-upload',
+  'direct-final-analysis',
+  'direct-final-gate',
+  'direct-final-main-prompt',
+  'direct-final-detail-prompt',
+  'direct-final-render',
+  'direct-final-review',
 ]);
 
 export function isNodeFeatureEnabled(kind: NodeKind): boolean {

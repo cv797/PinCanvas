@@ -34,5 +34,6 @@ decoded/
 
 # Playwright MCP 调试产物 + UI 截图
 .playwright-mcp/
+.serena/
 empty-canvas.png
 menu-open.png

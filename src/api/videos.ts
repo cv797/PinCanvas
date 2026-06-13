@@ -3,6 +3,7 @@ import { request } from './client';
 import { routeRequest, rewriteSoraPrompt, type RouteCtx, type TaskInput } from './model-routing';
 import { pollTask } from './poll';
 import { resolveTemplate, type Vars } from './template';
+import { apiUrl } from './url';
 
 export interface VideoGenResult {
   created?: number;
@@ -71,7 +72,7 @@ export function buildVideoRequest(opts: GenerateVideoOpts): BuiltVideoRequest {
 export async function generateVideo(opts: GenerateVideoOpts): Promise<VideoGenResult> {
   const built = buildVideoRequest(opts);
   const baseUrl = opts.baseUrl.replace(/\/+$/, '');
-  const url = baseUrl + built.endpoint;
+  const url = apiUrl(baseUrl, built.endpoint);
   const body = JSON.stringify(built.body);
 
   if (built.async) {
@@ -88,8 +89,8 @@ export async function generateVideo(opts: GenerateVideoOpts): Promise<VideoGenRe
     if (!taskId) throw new Error('Async video response missing task_id');
     const pollUrl =
       built.endpoint === '/v1/video/generations'
-        ? `${baseUrl}/v1/video/generations/${taskId}`
-        : `${baseUrl}/v1/tasks/${taskId}`;
+        ? apiUrl(baseUrl, `/v1/video/generations/${taskId}`)
+        : apiUrl(baseUrl, `/v1/tasks/${taskId}`);
     return pollTask<VideoGenResult>(pollUrl, {
       apiKey: opts.apiKey,
       signal: opts.signal,

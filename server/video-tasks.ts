@@ -183,7 +183,7 @@ async function runTask(id: string): Promise<void> {
 async function submitUpstream(task: ServerVideoTask, apiKey: string): Promise<void> {
   await updateTask(task, { status: 'submitting' });
   try {
-    const res = await fetch(task.baseUrl + task.endpoint, {
+    const res = await fetch(apiUrl(task.baseUrl, task.endpoint), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -209,8 +209,8 @@ async function submitUpstream(task: ServerVideoTask, apiKey: string): Promise<vo
     if (!upstreamTaskId) throw new Error('Async video response missing task_id');
     const pollUrl =
       task.endpoint === '/v1/video/generations'
-        ? `${task.baseUrl}/v1/video/generations/${encodeURIComponent(upstreamTaskId)}`
-        : `${task.baseUrl}/v1/tasks/${encodeURIComponent(upstreamTaskId)}`;
+        ? apiUrl(task.baseUrl, `/v1/video/generations/${encodeURIComponent(upstreamTaskId)}`)
+        : apiUrl(task.baseUrl, `/v1/tasks/${encodeURIComponent(upstreamTaskId)}`);
     await updateTask(task, {
       status: 'polling',
       upstreamTaskId,
@@ -404,6 +404,14 @@ function normalizeBaseUrl(value: string): string {
 
 function normalizeEndpoint(value: string): string {
   return value.startsWith('/') ? value : `/${value}`;
+}
+
+function apiUrl(baseUrl: string, endpoint: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  if (base.endsWith('/v1') && endpoint.startsWith('/v1/')) {
+    return base + endpoint.slice('/v1'.length);
+  }
+  return base + endpoint;
 }
 
 function hashToken(apiKey: string): string {
